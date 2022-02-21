@@ -1,2 +1,2 @@
-# as-bignumber
-An artibrary-precision big number class supporting decimal and integer numbers
+# BigNumber
+BigNumber is an AssemblyScript class for math with arbitrary-precision decimal and integer numbers

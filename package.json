@@ -1,0 +1,50 @@
+{
+  "name": "as-bignumber",
+  "description": "An AssemblyScript class for math with arbitrary-precision decimal and integer numbers",
+  "license": "MIT",
+  "private": false,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/polywrap/as-bignumber.git"
+  },
+  "version": "0.0.1",
+  "types": "assembly/index.ts",
+  "releaseFiles": [
+    "build/",
+    "README.md",
+    "LICENSE",
+    "package.json"
+  ],
+  "scripts": {
+    "reset": "yarn clean && yarn && yarn build",
+    "clean": "rimraf ./node_modules ./build ./**/coverage",
+    "build": "yarn build:optimized",
+    "build:untouched": "asc assembly/index.ts -o ./build/BigNumber.wasm -d ./build/BigNumber.d.ts --target debug",
+    "build:optimized": "asc assembly/index.ts -o ./build/BigNumber.wasm -d ./build/BigNumber.d.ts --target release",
+    "test": "asp --verbose",
+    "test:ci": "asp --summary",
+    "lint": "yarn eslint",
+    "lint:fix": "yarn eslint --fix",
+    "lint:ci": "yarn eslint",
+    "script:cases": "yarn script:calcPlannedCases && yarn script:genRandomCases && yarn script:calcRandomCases",
+    "script:calcPlannedCases": "yarn node scripts/calcTestCases.js ./scripts/data/testCaseInputs.json ./scripts/data/testCases.json",
+    "script:genRandomCases": "yarn node scripts/genRandomTestInputs.js ./scripts/data/randomTestCaseInputs.json 100",
+    "script:calcRandomCases": "yarn node scripts/calcTestCases.js ./scripts/data/randomTestCaseInputs.json ./scripts/data/randomTestCases.json"
+  },
+  "dependencies": {
+    "as-bigint": "^0.4.0"
+  },
+  "devDependencies": {
+    "@as-pect/cli": "6.2.4",
+    "@typescript-eslint/eslint-plugin": "4.11.1",
+    "@typescript-eslint/parser": "4.11.1",
+    "assemblyscript": "0.19.23",
+    "eslint": "7.16.0",
+    "eslint-config-prettier": "7.1.0",
+    "eslint-plugin-import": "2.22.1",
+    "eslint-plugin-prettier": "3.3.0",
+    "prettier": "2.2.1",
+    "rimraf": "3.0.2",
+    "bignumber.js": "^9.0.2"
+  }
+}
