@@ -28,7 +28,7 @@
     "lint:ci": "yarn eslint",
     "script:cases": "yarn script:calcPlannedCases && yarn script:genRandomCases && yarn script:calcRandomCases",
     "script:calcPlannedCases": "yarn node scripts/calcTestCases.js ./scripts/data/testCaseInputs.json ./scripts/data/testCases.json",
-    "script:genRandomCases": "yarn node scripts/genRandomTestInputs.js ./scripts/data/randomTestCaseInputs.json 100",
+    "script:genRandomCases": "yarn node scripts/genRandomTestInputs.js ./scripts/data/randomTestCaseInputs.json 200",
     "script:calcRandomCases": "yarn node scripts/calcTestCases.js ./scripts/data/randomTestCaseInputs.json ./scripts/data/randomTestCases.json"
   },
   "dependencies": {

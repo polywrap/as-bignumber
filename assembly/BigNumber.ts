@@ -170,6 +170,9 @@ export class BigNumber {
       }
     }
 
+    if (mantissa.isZero()) {
+      return new BigNumber(mantissa, 0, 0);
+    }
     return BigNumber.trimZeros(mantissa, exponent, I32.MIN_VALUE);
   }
 
@@ -219,18 +222,24 @@ export class BigNumber {
   }
 
   toFixed(places: i32 = 18, rounding: Rounding = BigNumber.defaultRounding): string {
+    // not rounding corresponds to rounding down in this case
+    const round: Rounding = rounding == Rounding.NONE ? Rounding.DOWN : rounding;
+
+    const res: BigNumber = BigNumber.roundToPlaces(this, places, round);
+    const resStr: string = res.toString();
+    if (this.e > this.precision) {
+      return resStr;
+    }
+
+    // calculate result length
     const trimmed: BigNumber = BigNumber.trimZeros(this.m, this.e, I32.MIN_VALUE);
     const intLength: i64 = <i64>trimmed.precision - trimmed.e;
-    const clampedLen: i64 = intLength > 0 ? intLength : 0;
-    const precision: i32 = BigNumber.overflowGuard(clampedLen + places);
+    const precision: i32 = BigNumber.overflowGuard(intLength + places);
     // negative precision corresponds to empty string
     if (precision <= 0) {
       return "0";
     }
-    // not rounding corresponds to rounding down in this case
-    const round: Rounding = rounding == Rounding.NONE ? Rounding.DOWN : rounding;
-    const res: BigNumber = BigNumber.doRound(trimmed, precision, round);
-    let resStr: string = res.toString();
+
     // decimal number results may need padded zeros
     if (places > 0) {
       if (trimmed.e <= 0) {
@@ -238,11 +247,11 @@ export class BigNumber {
         return resStr + ".".padEnd(1 + places, "0");
       } else {
         // decimal number returned in decimal form
-        return resStr.padEnd(precision + 1 + trimmed.isNegative, "0");
+        return resStr.padEnd(precision + 1 + res.isNegative, "0");
       }
     } else {
       // number returned in integer form -> may need trimming
-      return res.toString().substring(0, precision + trimmed.isNegative);
+      return resStr.substring(0, precision + res.isNegative);
     }
   }
 
@@ -254,7 +263,7 @@ export class BigNumber {
     // not rounding corresponds to rounding down in this case
     const round: Rounding = rounding == Rounding.NONE ? Rounding.DOWN : rounding;
     const res: BigNumber = BigNumber.doRound(trimmed, digits, round);
-    return res.toString(); // TODO: add 0 if rounding adds a zero
+    return res.toString(); // TODO: must add 0 if rounding adds a zero
   }
 
   toBigInt(): BigInt {
@@ -401,6 +410,212 @@ export class BigNumber {
     const res: BigNumber = BigNumber.trimZeros(quotient, e, eDiff);
     return BigNumber.doRound(res, precision, rounding);
   }
+
+  // sqrt(): BigNumber {
+  //   let x: BigNumber = this;
+  //
+  //   // zero?
+  //   if (this.isZero()) {
+  //     return new BigNumber(BigInt.ZERO, 0, 0);
+  //   }
+  //
+  //   // negative?
+  //   if (x.isNegative) {
+  //     throw new Error('Square root of negative numbers is not implemented: ' + this.toString());
+  //   }
+  //
+  //   let r: BigNumber = x;
+  //   let t: BigNumber = r;
+  //
+  //   let e: i32 = r.e * 2;
+  //
+  //   // Newton-Raphson iteration
+  //   const half = new BigNumber(BigInt.fromUInt16(5), 1, 0);
+  //   do {
+  //     t = r;
+  //     r = t.add(x.div(t)).mul(half) // round here?
+  //
+  //   } while (t.c.slice(0, e).join('') != r.c.slice(0, e).join(''));
+  //
+  //   return this.__round(Big.copyOf(r), (Big.DP -= 4) + r.e + 1);
+  // }
+
+//   public sqrt(precision: i32 = BigNumber.defaultPrecision, rounding: Rounding = BigNumber.defaultRounding): BigNumber {
+//     if (!this.isNegative) {
+//     /*
+//      * The following code draws on the algorithm presented in
+//      * "Properly Rounded Variable Precision Square Root," Hull and
+//      * Abrham, ACM Transactions on Mathematical Software, Vol 11,
+//      * No. 3, September 1985, Pages 229-237.
+//      *
+//      * The BigDecimal computational model differs from the one
+//      * presented in the paper in several ways: first BigDecimal
+//      * numbers aren't necessarily normalized, second many more
+//      * rounding modes are supported, including UNNECESSARY, and
+//      * exact results can be requested.
+//      *
+//      * The main steps of the algorithm below are as follows,
+//      * first argument reduce the value to the numerical range
+//      * [1, 10) using the following relations:
+//      *
+//      * x = y * 10 ^ exp
+//      * sqrt(x) = sqrt(y) * 10^(exp / 2) if exp is even
+//      * sqrt(x) = sqrt(y/10) * 10 ^((exp+1)/2) is exp is odd
+//      *
+//      * Then use Newton's iteration on the reduced value to compute
+//      * the numerical digits of the desired result.
+//      *
+//      * Finally, scale back to the desired exponent range and
+//      * perform any adjustment to get the preferred scale in the
+//      * representation.
+//      */
+//
+//     // The code below favors relative simplicity over checking
+//     // for special cases that could run faster.
+//
+//     const preferredScale: i32 = this.e / 2;
+//     const zeroWithFinalPreferredScale: BigNumber = valueOf(0L, preferredScale);
+//
+//     // First phase of numerical normalization, strip trailing
+//     // zeros and check for even powers of 10.
+//     BigDecimal stripped = this.stripTrailingZeros();
+//     int strippedScale = stripped.scale();
+//
+//     // Numerically sqrt(10^2N) = 10^N
+//     if (stripped.isPowerOfTen() &&
+//     strippedScale % 2 == 0) {
+//     BigDecimal result = valueOf(1L, strippedScale/2);
+//     if (result.scale() != preferredScale) {
+//     // Adjust to requested precision and preferred
+//     // scale as appropriate.
+//     result = result.add(zeroWithFinalPreferredScale, mc);
+//   }
+//   return result;
+//   }
+//
+//   // After stripTrailingZeros, the representation is normalized as
+//   //
+//   // unscaledValue * 10^(-scale)
+//   //
+//   // where unscaledValue is an integer with the mimimum
+//   // precision for the cohort of the numerical value. To
+//   // allow binary floating-point hardware to be used to get
+//   // approximately a 15 digit approximation to the square
+//   // root, it is helpful to instead normalize this so that
+//   // the significand portion is to right of the decimal
+//   // point by roughly (scale() - precision() +1).
+//
+//   // Now the precision / scale adjustment
+//   int scaleAdjust = 0;
+//   int scale = stripped.scale() - stripped.precision() + 1;
+//   if (scale % 2 == 0) {
+//     scaleAdjust = scale;
+//   } else {
+//     scaleAdjust = scale - 1;
+//   }
+//
+//   BigDecimal working = stripped.scaleByPowerOfTen(scaleAdjust);
+//
+//   assert  // Verify 0.1 <= working < 10
+//   ONE_TENTH.compareTo(working) <= 0 && working.compareTo(TEN) < 0;
+//
+//   // Use good ole' Math.sqrt to get the initial guess for
+//   // the Newton iteration, good to at least 15 decimal
+//   // digits. This approach does incur the cost of a
+//   //
+//   // BigDecimal -> double -> BigDecimal
+//   //
+//   // conversion cycle, but it avoids the need for several
+//   // Newton iterations in BigDecimal arithmetic to get the
+//   // working answer to 15 digits of precision. If many fewer
+//   // than 15 digits were needed, it might be faster to do
+//   // the loop entirely in BigDecimal arithmetic.
+//   //
+//   // (A double value might have as much many as 17 decimal
+//   // digits of precision; it depends on the relative density
+//   // of binary and decimal numbers at different regions of
+//   // the number line.)
+//   //
+//   // (It would be possible to check for certain special
+//   // cases to avoid doing any Newton iterations. For
+//   // example, if the BigDecimal -> double conversion was
+//   // known to be exact and the rounding mode had a
+//   // low-enough precision, the post-Newton rounding logic
+//   // could be applied directly.)
+//
+//   BigDecimal guess = new BigDecimal(Math.sqrt(working.doubleValue()));
+//   int guessPrecision = 15;
+//   int originalPrecision = mc.getPrecision();
+//   int targetPrecision;
+//
+//   // If an exact value is requested, it must only need about
+//   // half of the input digits to represent since multiplying
+//   // an N digit number by itself yield a 2N-1 digit or 2N
+//   // digit result.
+//   if (originalPrecision == 0) {
+//     targetPrecision = stripped.precision()/2 + 1;
+//   } else {
+//     targetPrecision = originalPrecision;
+//   }
+//
+//   // When setting the precision to use inside the Newton
+//   // iteration loop, take care to avoid the case where the
+//   // precision of the input exceeds the requested precision
+//   // and rounding the input value too soon.
+//   BigDecimal approx = guess;
+//   int workingPrecision = working.precision();
+//   do {
+//     int tmpPrecision = Math.max(Math.max(guessPrecision, targetPrecision + 2),
+//       workingPrecision);
+//     MathContext mcTmp = new MathContext(tmpPrecision, RoundingMode.HALF_EVEN);
+//     // approx = 0.5 * (approx + fraction / approx)
+//     approx = ONE_HALF.multiply(approx.add(working.divide(approx, mcTmp), mcTmp));
+//     guessPrecision *= 2;
+//   } while (guessPrecision < targetPrecision + 2);
+//
+//   BigDecimal result;
+//   RoundingMode targetRm = mc.getRoundingMode();
+//   if (targetRm == RoundingMode.UNNECESSARY || originalPrecision == 0) {
+//     RoundingMode tmpRm =
+//       (targetRm == RoundingMode.UNNECESSARY) ? RoundingMode.DOWN : targetRm;
+//     MathContext mcTmp = new MathContext(targetPrecision, tmpRm);
+//     result = approx.scaleByPowerOfTen(-scaleAdjust/2).round(mcTmp);
+//
+//     // If result*result != this numerically, the square
+//     // root isn't exact
+//     if (this.subtract(result.multiply(result)).compareTo(ZERO) != 0) {
+//       throw new ArithmeticException("Computed square root not exact.");
+//     }
+//   } else {
+//     result = approx.scaleByPowerOfTen(-scaleAdjust/2).round(mc);
+//   }
+//
+//   if (result.scale() != preferredScale) {
+//     // The preferred scale of an add is
+//     // max(addend.scale(), augend.scale()). Therefore, if
+//     // the scale of the result is first minimized using
+//     // stripTrailingZeros(), adding a zero of the
+//     // preferred scale rounding the correct precision will
+//     // perform the proper scale vs precision tradeoffs.
+//     result = result.stripTrailingZeros().
+//     add(zeroWithFinalPreferredScale,
+//       new MathContext(originalPrecision, RoundingMode.UNNECESSARY));
+//   }
+//   assert squareRootResultAssertions(result, mc);
+//   return result;
+//   } else {
+//     switch (signum) {
+//       case -1:
+//         throw new ArithmeticException("Attempted square root " +
+//           "of negative BigDecimal");
+//       case 0:
+//         return valueOf(0L, scale()/2);
+//
+//       default:
+//         throw new AssertionError("Bad value from signum");
+//     }
+//   }
+// }
 
   // UTILITIES /////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -677,9 +892,11 @@ export class BigNumber {
     if (precision <= 0 || val.precision <= precision) {
       return val;
     }
+
     let m: BigInt = val.m;
     let e: i32 = val.e;
     let prec: i32 = val.precision;
+    
     let pDiff: i32 = prec - precision;
     while (pDiff > 0) {
       e = BigNumber.overflowGuard(<i64>e - pDiff);
@@ -687,7 +904,26 @@ export class BigNumber {
       prec = BigNumber.intLength(m);
       pDiff = prec - precision;
     }
+
     return new BigNumber(m, e, prec);
+  }
+
+  private static roundToPlaces(val: BigNumber, digits: i32, rounding: Rounding): BigNumber {
+    if (val.e < digits) {
+      return val;
+    }
+
+    let m: BigInt = val.m;
+    let e: i32 = val.e;
+
+    let dDiff: i32 = e - digits;
+    while (dDiff > 0 && !m.isZero()) {
+      e = BigNumber.overflowGuard(<i64>e - dDiff);
+      m = BigNumber.divideAndRoundByPowTen(m, dDiff, rounding);
+      dDiff = e - digits;
+    }
+
+    return new BigNumber(m, e, -1);
   }
 
   /**

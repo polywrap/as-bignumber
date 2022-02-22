@@ -17,8 +17,6 @@ export class TestCase {
   xLTEy: boolean;
   xEQy: boolean;
   xCTy: i32;
-  absX: string;
-  negX: string;
   xIsNeg: boolean;
   xIsZero: boolean;
   xIsInt: boolean;
