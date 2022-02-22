@@ -1,4 +1,9 @@
 import { BigNumber } from "../BigNumber";
+import { TestCase } from "./testUtils/TestCase";
+import { plannedTestCases } from "./testUtils/testCases";
+import { randomTestCases } from "./testUtils/randomTestCases";
+
+const testCases: TestCase[] = plannedTestCases.concat(randomTestCases);
 
 describe("Comparison operations", () => {
 
@@ -155,6 +160,19 @@ describe("Comparison operations", () => {
     expect(biD.gt(biC)).toStrictEqual(false);
     expect(biD.gte(biC)).toStrictEqual(false);
   });
-  
+
+  it("compares test cases", () => {
+    for (let i = 0; i < testCases.length; i++) {
+      const testCase: TestCase = testCases[i];
+      const x = BigNumber.fromString(testCase.x);
+      const y = BigNumber.fromString(testCase.y);
+      expect(x.compareTo(y)).toStrictEqual(testCase.xCTy);
+      expect(x.eq(y)).toStrictEqual(testCase.xEQy);
+      expect(x.lt(y)).toStrictEqual(testCase.xLTy);
+      expect(x.lte(y)).toStrictEqual(testCase.xLTEy);
+      expect(x.gt(y)).toStrictEqual(testCase.xGTy);
+      expect(x.gte(y)).toStrictEqual(testCase.xGTEy);
+    }
+  });
   
 });

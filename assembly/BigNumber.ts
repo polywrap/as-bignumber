@@ -15,9 +15,9 @@ export enum Rounding {
 export class BigNumber {
 
   // Mantissa; A BigNumber takes the form m * 10^-e
-  private readonly m: BigInt;
+  readonly m: BigInt;
   // Scale; A BigNumber takes the form m * 10^-e
-  private readonly e: i32;
+  readonly e: i32;
   // Limits the length of the mantissa
   private _precision: i32;
   get precision(): i32 {
@@ -25,6 +25,15 @@ export class BigNumber {
       this._precision = BigNumber.intLength(this.m);
     }
     return this._precision;
+  }
+  // returns true if this BigNumber has an integer value
+  private _isInteger: i32 = -1;
+  get isInteger(): boolean {
+    if (this._isInteger < 0) {
+      const trimmed: BigNumber = BigNumber.trimZeros(this.m, this.e, I32.MIN_VALUE);
+      this._isInteger = trimmed.e <= 0 ? 1 : 0;
+    }
+    return this._isInteger == 1;
   }
 
   // 155, the number of digits in the maximum value of a 512 bit integer
@@ -225,7 +234,7 @@ export class BigNumber {
     // not rounding corresponds to rounding down in this case
     const round: Rounding = rounding == Rounding.NONE ? Rounding.DOWN : rounding;
 
-    const res: BigNumber = BigNumber.roundToPlaces(this, places, round);
+    const res: BigNumber = this.roundToPlaces(places, round);
     const resStr: string = res.toString();
     if (this.e > this.precision) {
       return resStr;
@@ -270,7 +279,6 @@ export class BigNumber {
     return this.floor().m.copy();
   }
 
-  // TODO: what happens when f64 overflows?
   toFloat64(): f64 {
     return F64.parseFloat(this.toString());
   }
@@ -474,7 +482,7 @@ export class BigNumber {
     return res;
   }
 
-  // follows ANSI standard X3.274-1996
+  // follows ANSI standard X3.274-1996 algorithm
   pow(k: i32, precision: i32 = BigNumber.defaultPrecision, rounding: Rounding = BigNumber.defaultRounding): BigNumber {
     if (precision <= 0) {
       if (k < 0 || k > 999999999) {
@@ -498,7 +506,6 @@ export class BigNumber {
     }
     const workingPrec: i32 = precision + kLen + 1;
 
-    // ready to carry out power calculation...
     let accum: BigNumber = new BigNumber(BigInt.ONE, 0, 0);
     let seenbit: boolean = false;        // set once we've seen a 1-bit
     for (let i=1; ; i++) {            // for each bit [top bit ignored]
@@ -525,8 +532,6 @@ export class BigNumber {
 
   // UTILITIES /////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-  // TODO: max, min, round, sqrt, pow
-
   get isNegative(): boolean {
     return this.m.isNegative;
   }
@@ -547,9 +552,17 @@ export class BigNumber {
     return this.round(precision, Rounding.CEIL);
   }
 
-  setScale(e: i32, rounding: Rounding): BigNumber {
+  static min(x: BigNumber, y: BigNumber): BigNumber {
+    return x.lte(y) ? x : y;
+  }
+
+  static max(x: BigNumber, y: BigNumber): BigNumber {
+    return x.gte(y) ? x : y;
+  }
+
+  setScale(e: i32, rounding: Rounding = BigNumber.defaultRounding): BigNumber {
     if (e == this.e) {
-      return this.copy();
+      return this;
     }
     if (this.m.isZero()) {
       return new BigNumber(this.m.copy(), e, this._precision);
@@ -806,19 +819,19 @@ export class BigNumber {
     return quotient;
   }
 
-  private static roundToPlaces(val: BigNumber, digits: i32, rounding: Rounding): BigNumber {
-    if (val.e < digits) {
-      return val;
+  private roundToPlaces(places: i32, rounding: Rounding): BigNumber {
+    if (this.e < places) {
+      return this;
     }
 
-    let m: BigInt = val.m;
-    let e: i32 = val.e;
+    let m: BigInt = this.m;
+    let e: i32 = this.e;
 
-    let dDiff: i32 = e - digits;
-    while (dDiff > 0 && !m.isZero()) {
-      e = BigNumber.overflowGuard(<i64>e - dDiff);
-      m = BigNumber.divideAndRoundByPowTen(m, dDiff, rounding);
-      dDiff = e - digits;
+    let pDiff: i32 = e - places;
+    while (pDiff > 0 && !m.isZero()) {
+      e = BigNumber.overflowGuard(<i64>e - pDiff);
+      m = BigNumber.divideAndRoundByPowTen(m, pDiff, rounding);
+      pDiff = e - places;
     }
 
     return new BigNumber(m, e, -1);

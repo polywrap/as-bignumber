@@ -5,7 +5,7 @@ import { randomTestCases } from "./testUtils/randomTestCases";
 
 const testCases: TestCase[] = plannedTestCases.concat(randomTestCases);
 
-describe("BigNumber simple arithmetic", () => {
+describe("Arithmetic operations", () => {
 
   it("adds", () => {
     for (let i = 0; i < testCases.length; i++) {
