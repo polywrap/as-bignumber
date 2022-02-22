@@ -477,17 +477,29 @@ describe("fromFraction", () => {
 
 describe("toBigInt", () => {
   it("returns BigInt as floor of decimal value", () => {
-    const dec0 = BigNumber.fromString("123456789.1234");
-    expect(dec0.toBigInt().toString()).toStrictEqual("123456789");
+    let dec = BigNumber.fromString("123456789.1234");
+    expect(dec.toBigInt().toString()).toStrictEqual("123456789");
 
-    const dec1 = BigNumber.fromString("0.1234");
-    expect(dec1.toBigInt().toString()).toStrictEqual("0");
+    dec = BigNumber.fromString("-123456789.1234");
+    expect(dec.toBigInt().toString()).toStrictEqual("-123456789");
 
-    const dec2 = BigNumber.fromString("123456789.9876");
-    expect(dec2.toBigInt().toString()).toStrictEqual("123456789");
+    dec = BigNumber.fromString("123456789.9876");
+    expect(dec.toBigInt().toString()).toStrictEqual("123456789");
 
-    const dec3 = BigNumber.fromString("-0.9876");
-    expect(dec3.toBigInt().toString()).toStrictEqual("0");
+    dec = BigNumber.fromString("-123456789.9876");
+    expect(dec.toBigInt().toString()).toStrictEqual("-123456789");
+
+    dec = BigNumber.fromString("0.1234");
+    expect(dec.toBigInt().toString()).toStrictEqual("0");
+
+    dec = BigNumber.fromString("-0.1234");
+    expect(dec.toBigInt().toString()).toStrictEqual("0");
+
+    dec = BigNumber.fromString("0.9876");
+    expect(dec.toBigInt().toString()).toStrictEqual("0");
+
+    dec = BigNumber.fromString("-0.9876");
+    expect(dec.toBigInt().toString()).toStrictEqual("0");
   });
 });
 

@@ -74,6 +74,42 @@ export class BigNumber {
     this._precision = precision;
   }
 
+  // generic constructor based on https://github.com/ttulka/as-big/blob/main/assembly/Big.ts#L84
+  /**
+   * Returns a new {BigNumber} instance from generic type {T}.
+   *
+   * @param  val the number as {BigNumber}, {string}, or {number}
+   * @return BigNumber the new {BigNumber} instance
+   */
+  static from<T>(val: T): BigNumber {
+    if (val instanceof BigNumber) return val;
+    // @ts-ignore
+    if (val instanceof string) return BigNumber.fromString(val);
+    // @ts-ignore
+    if (val instanceof f32) return BigNumber.fromFloat64(<f64>val);
+    // @ts-ignore
+    if (val instanceof f64) return BigNumber.fromFloat64(val);
+    // @ts-ignore
+    if (val instanceof i8) return new BigNumber(BigInt.fromInt16(<i16>val), 0, 0);
+    // @ts-ignore
+    if (val instanceof u8) return new BigNumber(BigInt.fromUInt16(<u16>val), 0, 0);
+    // @ts-ignore
+    if (val instanceof i16) return new BigNumber(BigInt.fromInt16(val), 0, 0);
+    // @ts-ignore
+    if (val instanceof u16) return new BigNumber(BigInt.fromUInt16(val), 0, 0);
+    // @ts-ignore
+    if (val instanceof i32) return new BigNumber(BigInt.fromInt32(val), 0, 0);
+    // @ts-ignore
+    if (val instanceof u32) return new BigNumber(BigInt.fromUInt32(val), 0, 0);
+    // @ts-ignore
+    if (val instanceof i64) return new BigNumber(BigInt.fromInt64(val), 0, 0);
+    // @ts-ignore
+    if (val instanceof u64) return new BigNumber(BigInt.fromUInt64(val), 0, 0);
+
+    throw new TypeError("Unsupported generic type " + nameof<T>(val));
+  }
+
+  // TODO: replace args with fraction class
   static fromFraction(numerator: BigInt, denominator: BigInt, precision: i32 = BigNumber.defaultPrecision, rounding: Rounding = BigNumber.defaultRounding): BigNumber {
     const floatNumerator = new BigNumber(numerator, 0, 0);
     const floatDenominator = new BigNumber(denominator, 0, 0);
@@ -86,6 +122,7 @@ export class BigNumber {
    * @param precision
    * @param rounding
    */
+  // todo: improve readability by skipping leading redundant leading zeros before main loop
   static fromString(val: string, precision: i32 = BigNumber.defaultPrecision, rounding: Rounding = BigNumber.defaultRounding): BigNumber {
     // big number values
     let mantissa: BigInt; // mantissa
@@ -185,6 +222,14 @@ export class BigNumber {
     return BigNumber.trimZeros(mantissa, exponent, I32.MIN_VALUE);
   }
 
+  static fromBigInt(val: BigInt): BigNumber {
+    return new BigNumber(val, 0, 0);
+  }
+
+  static fromFloat64(val: f64, precision: i32 = BigNumber.defaultPrecision, rounding: Rounding = BigNumber.defaultRounding): BigNumber {
+    return BigNumber.fromString(val.toString(), precision, rounding);
+  }
+
   // O(N)
   copy(): BigNumber {
     return new BigNumber(this.m.copy(), this.e, this._precision);
@@ -198,6 +243,11 @@ export class BigNumber {
   // O(N)
   abs(): BigNumber  {
     return new BigNumber(this.m.abs(), this.e, this._precision);
+  }
+
+  reciprocal(precision: i32 = BigNumber.defaultPrecision, rounding: Rounding = BigNumber.defaultRounding): BigNumber {
+    const one: BigNumber = new BigNumber(BigInt.ONE, 0, 0);
+    return one.div(this, precision, rounding);
   }
 
   // OUTPUT ////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -276,7 +326,10 @@ export class BigNumber {
   }
 
   toBigInt(): BigInt {
-    return this.floor().m.copy();
+    if (this.isInteger) {
+      return this.m.copy();
+    }
+    return this.roundToPlaces(0, Rounding.DOWN).m.copy();
   }
 
   toFloat64(): f64 {
@@ -285,34 +338,28 @@ export class BigNumber {
 
   // COMPARISON OPERATORS //////////////////////////////////////////////////////////////////////////////////////////////
 
-  @operator("==")
-  eq(other: BigNumber): boolean {
-    return this.compareTo(other) == 0;
+  eq<T>(other: T): boolean {
+    return this.compareTo(BigNumber.from(other)) == 0;
   }
 
-  @operator("!=")
-  ne(other: BigNumber): boolean {
-    return !this.eq(other);
+  ne<T>(other: T): boolean {
+    return !this.eq(BigNumber.from(other));
   }
 
-  @operator("<")
-  lt(other: BigNumber): boolean {
-    return this.compareTo(other) < 0;
+  lt<T>(other: T): boolean {
+    return this.compareTo(BigNumber.from(other)) < 0;
   }
 
-  @operator("<=")
-  lte(other: BigNumber): boolean {
-    return this.compareTo(other) <= 0;
+  lte<T>(other: T): boolean {
+    return this.compareTo(BigNumber.from(other)) <= 0;
   }
 
-  @operator(">")
-  gt(other: BigNumber): boolean {
-    return this.compareTo(other) > 0;
+  gt<T>(other: T): boolean {
+    return this.compareTo(BigNumber.from(other)) > 0;
   }
 
-  @operator(">=")
-  gte(other: BigNumber): boolean {
-    return this.compareTo(other) >= 0;
+  gte<T>(other: T): boolean {
+    return this.compareTo(BigNumber.from(other)) >= 0;
   }
 
   compareTo(other: BigNumber): i32 {
@@ -356,34 +403,33 @@ export class BigNumber {
 
   // ARITHMETIC ////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-  @operator("+")
-  add(other: BigNumber): BigNumber {
+  add<T>(other: T): BigNumber {
+    let addend = BigNumber.from(other);
     let left: BigInt = this.m;
-    let right: BigInt = other.m;
+    let right: BigInt = addend.m;
     let exponent: i32;
-    if (this.e >= other.e) {
-      const rescale: i32 = BigNumber.overflowGuard(<i64>this.e - other.e, right.isZero());
+    if (this.e >= addend.e) {
+      const rescale: i32 = BigNumber.overflowGuard(<i64>this.e - addend.e, right.isZero());
       right = BigNumber.mulPowTen(right, rescale);
       exponent = this.e;
     } else {
-      const rescale: i32 = BigNumber.overflowGuard(<i64>other.e - this.e, left.isZero());
+      const rescale: i32 = BigNumber.overflowGuard(<i64>addend.e - this.e, left.isZero());
       left = BigNumber.mulPowTen(left, rescale);
-      exponent = other.e;
+      exponent = addend.e;
     }
     return new BigNumber(left.add(right), exponent, 0);
   }
 
-  @operator("-")
-  sub(other: BigNumber): BigNumber {
-    return this.add(other.opposite());
+  sub<T>(other: T): BigNumber {
+    return this.add(BigNumber.from(other).opposite());
   }
 
-  @operator("*")
-  mul(other: BigNumber, precision: i32 = BigNumber.defaultPrecision, rounding: Rounding = BigNumber.defaultRounding): BigNumber {
+  mul<T>(other: T, precision: i32 = BigNumber.defaultPrecision, rounding: Rounding = BigNumber.defaultRounding): BigNumber {
+    const multiplier: BigNumber = BigNumber.from(other);
     const left: BigInt = this.m;
-    const right: BigInt = other.m;
+    const right: BigInt = multiplier.m;
     const m: BigInt = left.mul(right);
-    const e: i32 = BigNumber.overflowGuard( <i64>this.e + other.e, this.m.isZero());
+    const e: i32 = BigNumber.overflowGuard( <i64>this.e + multiplier.e, this.m.isZero());
     const unrounded: BigNumber = new BigNumber(m, e, BigNumber.intLength(m));
     return unrounded.round(precision, rounding);
   }
@@ -391,19 +437,19 @@ export class BigNumber {
   /**
    * Divides two BigNumbers and rounds result
    */
-  @operator("/")
-  div(other: BigNumber, precision: i32 = BigNumber.defaultPrecision, rounding: Rounding = BigNumber.defaultRounding): BigNumber {
-    if (other.m.isZero()) {
+  div<T>(other: T, precision: i32 = BigNumber.defaultPrecision, rounding: Rounding = BigNumber.defaultRounding): BigNumber {
+    const divisor: BigNumber = BigNumber.from(other);
+    if (divisor.m.isZero()) {
       throw new Error("Divide by zero");
     }
     if (this.m.isZero()) {
-      return new BigNumber(this.m.copy(), BigNumber.overflowGuard(this.e - other.e, true), this.precision);
+      return new BigNumber(this.m.copy(), BigNumber.overflowGuard(this.e - divisor.e, true), this.precision);
     }
     let left: BigInt = this.m;
-    let right: BigInt = other.m;
+    let right: BigInt = divisor.m;
     const leftP: i32 = this.precision;
-    let rightP: i32 = other.precision;
-    const eDiff: i32 = BigNumber.overflowGuard(this.e - other.e);
+    let rightP: i32 = divisor.precision;
+    const eDiff: i32 = BigNumber.overflowGuard(this.e - divisor.e);
     // Normalize dividend & divisor so that both fall into [0.1, 0.999...]
     if (BigNumber.compareMagnitudeNormalized(left, leftP, right, rightP) > 0) {
       rightP -= 1;
@@ -444,7 +490,7 @@ export class BigNumber {
     const targetPrecision: i32 = precision <= 0 ? trimmed.precision / 2 + 1 : precision;
 
     // initial guess is an approximation found using Math.sqrt()
-    let approx: BigNumber = BigNumber.fromString(Math.sqrt(normalized.toFloat64()).toString());
+    let approx: BigNumber = BigNumber.fromFloat64(Math.sqrt(normalized.toFloat64()));
     let approxPrec: i32 = 15;
 
     // Newton-Raphson iteration
@@ -453,9 +499,9 @@ export class BigNumber {
     do {
       // max of normalized precision, target precision, and approximation precision
       let maxGuessTargetPrec: i32 = approxPrec > targetPrecPlusTwo ? approxPrec : targetPrecPlusTwo;
-      let tmpPrecision: i32 = maxGuessTargetPrec > normalizedPrec ? maxGuessTargetPrec : normalizedPrec;
+      let tempPrec: i32 = maxGuessTargetPrec > normalizedPrec ? maxGuessTargetPrec : normalizedPrec;
       // approx = 0.5 * (approx + fraction / approx)
-      approx = half.mul(approx.add(normalized.div(approx, tmpPrecision, Rounding.HALF_EVEN)));
+      approx = half.mul(approx.add(normalized.div(approx, tempPrec, Rounding.HALF_EVEN)));
       approxPrec *= 2;
     } while (approxPrec < targetPrecPlusTwo);
 
@@ -522,8 +568,7 @@ export class BigNumber {
     }
     // if negative n, calculate the reciprocal
     if (k < 0) {
-      const one: BigNumber = new BigNumber(BigInt.ONE, 0, 0);
-      accum = one.div(accum, workingPrec, rounding);
+      accum = accum.reciprocal(workingPrec, rounding);
     }
     // round to final precision and strip zeros
     const rounded: BigNumber = accum.round(precision, rounding);
@@ -541,23 +586,49 @@ export class BigNumber {
   }
 
   floor(): BigNumber {
-    const intLen: i64 = <i64>this.precision - this.e;
-    const precision: i32 = BigNumber.overflowGuard(intLen > 0 ? intLen : 0);
-    return this.round(precision, Rounding.FLOOR);
+    if (this.isInteger) {
+      return this;
+    }
+    const rounded: BigNumber = this.roundToPlaces(0, Rounding.FLOOR);
+    if (this.isNegative && this.lt(rounded)) {
+      return rounded.sub(1);
+    }
+    return rounded;
   }
 
   ceil(): BigNumber {
-    const intLen: i64 = <i64>this.precision - this.e;
-    const precision: i32 = BigNumber.overflowGuard(intLen > 0 ? intLen : 0);
-    return this.round(precision, Rounding.CEIL);
+    if (this.isInteger) {
+      return this;
+    }
+    const rounded: BigNumber = this.roundToPlaces(0, Rounding.CEIL);
+    // rounding is not working as expected in this special case
+    if (this.isNegative && !rounded.isNegative && !rounded.isZero()) {
+      return rounded.sub(1);
+    }
+    return rounded;
   }
 
-  static min(x: BigNumber, y: BigNumber): BigNumber {
-    return x.lte(y) ? x : y;
+  // ceil(): BigNumber {
+  //   if (this.isInteger) {
+  //     return this;
+  //   }
+  //   const rounded: BigNumber = this.roundToPlaces(0, Rounding.FLOOR);
+  //   if (this.isNegative && this.lt(rounded)) {
+  //     return rounded;
+  //   }
+  //   return rounded.add(1);
+  // }
+
+  static min<T, U>(x: T, y: U): BigNumber {
+    const left: BigNumber = BigNumber.from(x);
+    const right: BigNumber = BigNumber.from(y);
+    return left.lte(right) ? left : right;
   }
 
-  static max(x: BigNumber, y: BigNumber): BigNumber {
-    return x.gte(y) ? x : y;
+  static max<T, U>(x: T, y: U): BigNumber {
+    const left: BigNumber = BigNumber.from(x);
+    const right: BigNumber = BigNumber.from(y);
+    return left.gte(right) ? left : right;
   }
 
   setScale(e: i32, rounding: Rounding = BigNumber.defaultRounding): BigNumber {
@@ -573,10 +644,11 @@ export class BigNumber {
       const precision: i32 = this.precision > 0 ? this.precision + rescale : 0;
       return new BigNumber(m, e, precision);
     } else {
+      // if new e is less than original e, the result may not be equal to the original BigNumber due to rounding
       const rescale: i32 = BigNumber.overflowGuard(<i64>this.e - e);
       const divisor: BigInt = BigNumber.tenToThe(rescale);
       const m: BigInt = BigNumber.divideAndRound(this.m, divisor, rounding);
-      return new BigNumber(m, e, BigNumber.intLength(m));
+      return new BigNumber(m, e, 0);
     }
   }
 
@@ -598,48 +670,6 @@ export class BigNumber {
     }
 
     return new BigNumber(m, e, prec);
-  }
-
-  // SYNTACTIC SUGAR ///////////////////////////////////////////////////////////////////////////////////////////////////
-
-  static eq(left: BigNumber, right: BigNumber): boolean {
-    return left.eq(right);
-  }
-
-  static ne(left: BigNumber, right: BigNumber): boolean {
-    return left.ne(right);
-  }
-
-  static lt(left: BigNumber, right: BigNumber): boolean {
-    return left.lt(right);
-  }
-
-  static lte(left: BigNumber, right: BigNumber): boolean {
-    return left.lte(right);
-  }
-
-  static gt(left: BigNumber, right: BigNumber): boolean {
-    return left.gt(right);
-  }
-
-  static gte(left: BigNumber, right: BigNumber): boolean {
-    return left.gte(right);
-  }
-
-  static add(left: BigNumber, right: BigNumber): BigNumber {
-    return left.add(right);
-  }
-
-  static sub(left: BigNumber, right: BigNumber): BigNumber {
-    return left.sub(right);
-  }
-
-  static mul(left: BigNumber, right: BigNumber): BigNumber {
-    return left.mul(right);
-  }
-
-  static div(left: BigNumber, right: BigNumber): BigNumber {
-    return left.div(right);
   }
 
   // PARSE SUPPORT /////////////////////////////////////////////////////////////
@@ -935,5 +965,135 @@ export class BigNumber {
       }
     }
     return new BigNumber(newM, newE, 0);
+  }
+
+  // SYNTAX SUGAR ///////////////////////////////////////////////////////////////////////////////////////////////////
+
+  static eq<T, U>(left: T, right: U): boolean {
+    const a: BigNumber = BigNumber.from(left);
+    const b: BigNumber = BigNumber.from(right);
+    return a.eq(b);
+  }
+
+  @operator("==")
+  private static eqOp(left: BigNumber, right: BigNumber): boolean {
+    return left.eq(right);
+  }
+
+  static ne<T, U>(left: T, right: U): boolean {
+    const a: BigNumber = BigNumber.from(left);
+    const b: BigNumber = BigNumber.from(right);
+    return a.ne(b);
+  }
+
+  @operator("!=")
+  private static neOp(left: BigNumber, right: BigNumber): boolean {
+    return left.ne(right);
+  }
+
+  static lt<T, U>(left: T, right: U): boolean {
+    const a: BigNumber = BigNumber.from(left);
+    const b: BigNumber = BigNumber.from(right);
+    return a.lt(b);
+  }
+
+  @operator("<")
+  private static ltOp(left: BigNumber, right: BigNumber): boolean {
+    return left.lt(right);
+  }
+
+  static lte<T, U>(left: T, right: U): boolean {
+    const a: BigNumber = BigNumber.from(left);
+    const b: BigNumber = BigNumber.from(right);
+    return a.lte(b);
+  }
+
+  @operator("<=")
+  private static lteOp(left: BigNumber, right: BigNumber): boolean {
+    return left.lte(right);
+  }
+
+  static gt<T, U>(left: T, right: U): boolean {
+    const a: BigNumber = BigNumber.from(left);
+    const b: BigNumber = BigNumber.from(right);
+    return a.gt(b);
+  }
+
+  @operator(">")
+  static gtOp(left: BigNumber, right: BigNumber): boolean {
+    return left.gt(right);
+  }
+
+  static gte<T, U>(left: T, right: U): boolean {
+    const a: BigNumber = BigNumber.from(left);
+    const b: BigNumber = BigNumber.from(right);
+    return a.gte(b);
+  }
+
+  @operator(">=")
+  static gteOp(left: BigNumber, right: BigNumber): boolean {
+    return left.gte(right);
+  }
+
+  static add<T, U>(left: T, right: U): BigNumber {
+    const a: BigNumber = BigNumber.from(left);
+    const b: BigNumber = BigNumber.from(right);
+    return a.add(b);
+  }
+
+  @operator("+")
+  private static addOp(left: BigNumber, right: BigNumber): BigNumber {
+    return left.add(right);
+  }
+
+  static sub<T, U>(left: T, right: U): BigNumber {
+    const a: BigNumber = BigNumber.from(left);
+    const b: BigNumber = BigNumber.from(right);
+    return a.sub(b);
+  }
+
+  @operator("-")
+  private static subOp(left: BigNumber, right: BigNumber): BigNumber {
+    return left.sub(right);
+  }
+
+  static mul<T, U>(left: T, right: U, precision: i32 = BigNumber.defaultPrecision, rounding: Rounding = BigNumber.defaultRounding): BigNumber {
+    const a: BigNumber = BigNumber.from(left);
+    const b: BigNumber = BigNumber.from(right);
+    return a.mul(b, precision, rounding);
+  }
+
+  @operator("*")
+  private static mulOp(left: BigNumber, right: BigNumber): BigNumber {
+    return left.mul(right, BigNumber.defaultPrecision, BigNumber.defaultRounding);
+  }
+
+  static div<T, U>(left: T, right: U, precision: i32 = BigNumber.defaultPrecision, rounding: Rounding = BigNumber.defaultRounding): BigNumber {
+    const a: BigNumber = BigNumber.from(left);
+    const b: BigNumber = BigNumber.from(right);
+    return a.div(b, precision, rounding);
+  }
+
+  @operator("/")
+  private static divOp(left: BigNumber, right: BigNumber): BigNumber {
+    return left.div(right, BigNumber.defaultPrecision, BigNumber.defaultRounding);
+  }
+
+  static sqrt<T>(x: T): BigNumber {
+    const val: BigNumber = BigNumber.from(x);
+    return val.sqrt();
+  }
+
+  static pow<T>(base: T, k: i32, precision: i32 = BigNumber.defaultPrecision, rounding: Rounding = BigNumber.defaultRounding): BigNumber {
+    const val: BigNumber = BigNumber.from(base);
+    return val.pow(k, precision, rounding);
+  }
+
+  @operator("**")
+  private static powOp(left: BigNumber, right: BigNumber): BigNumber {
+    if (!right.isInteger) {
+      throw new Error("Exponent must be an integer value");
+    }
+    return left.pow(right.m.toInt32());
   }
 }

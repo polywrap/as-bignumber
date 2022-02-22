@@ -37,7 +37,15 @@ describe("Utility methods", () => {
       const testCase: TestCase = testCases[i];
       const x = BigNumber.fromString(testCase.x);
       const xString = x.toString();
-      expect(x.floor().toString()).toStrictEqual(xString.substring(0, xString.indexOf(".")));
+      const xPointIdx = xString.indexOf(".");
+      let expected = xPointIdx > 0 ? xString.substring(0, xPointIdx) : xString;
+      if (x.isNegative && !x.isInteger) {
+        expected = BigInt.from(expected).subInt(1).toString();
+        expect(x.floor().toString()).toStrictEqual(expected);
+      } else {
+        expected = BigInt.from(expected).toString();
+        expect(x.floor().toString()).toStrictEqual(expected);
+      }
     }
   });
 
@@ -45,8 +53,11 @@ describe("Utility methods", () => {
     for (let i = 0; i < testCases.length; i++) {
       const testCase: TestCase = testCases[i];
       const x = BigNumber.fromString(testCase.x);
-      const ceil: BigNumber = x.floor().add(new BigNumber(BigInt.ONE, 0, 0));
-      expect(x.ceil().toString()).toStrictEqual(ceil.toString());
+      if (x.isInteger) {
+        expect(x.ceil().toString()).toStrictEqual(x.floor().toString());
+      } else {
+        expect(x.ceil().toString()).toStrictEqual(x.floor().add(1).toString());
+      }
     }
   });
 
@@ -74,9 +85,13 @@ describe("Utility methods", () => {
     for (let i = 0; i < testCases.length; i++) {
       const testCase: TestCase = testCases[i];
       const x = BigNumber.fromString(testCase.x);
-      const newX = x.setScale(x.e / 2)
-      expect(newX.e).toStrictEqual(x.e / 2);
-      expect(x.eq(newX)).toBeTruthy();
+
+      const xBigE = x.setScale(x.e * 2)
+      expect(xBigE.e).toStrictEqual(x.e * 2);
+      expect(x.eq(xBigE)).toBeTruthy();
+
+      const xSmallE = x.setScale(x.e / 2)
+      expect(xSmallE.e).toStrictEqual(x.e / 2);
     }
   });
 });
