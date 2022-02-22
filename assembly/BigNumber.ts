@@ -155,7 +155,7 @@ export class BigNumber {
     }
     // Adjust scale if exp is not zero
     if (eMark != 0) {
-      exponent = BigNumber.adjustScale(exponent, eMark);
+      exponent = BigNumber.overflowGuard(<i64>exponent - eMark);
     }
 
     // Remove leading zeros from precision (digits count)
@@ -262,7 +262,7 @@ export class BigNumber {
     const trimmed: BigNumber = BigNumber.trimZeros(this.m, this.e, I32.MIN_VALUE);
     // not rounding corresponds to rounding down in this case
     const round: Rounding = rounding == Rounding.NONE ? Rounding.DOWN : rounding;
-    const res: BigNumber = BigNumber.doRound(trimmed, digits, round);
+    const res: BigNumber = trimmed.round(digits, round);
     return res.toString(); // TODO: must add 0 if rounding adds a zero
   }
 
@@ -377,7 +377,7 @@ export class BigNumber {
     const m: BigInt = left.mul(right);
     const e: i32 = BigNumber.overflowGuard( <i64>this.e + other.e, this.m.isZero());
     const unrounded: BigNumber = new BigNumber(m, e, BigNumber.intLength(m));
-    return BigNumber.doRound(unrounded, precision, rounding);
+    return unrounded.round(precision, rounding);
   }
 
   /**
@@ -413,11 +413,11 @@ export class BigNumber {
     const quotient: BigInt = BigNumber.divideAndRound(left, right, rounding);
     // clean up and round
     const res: BigNumber = BigNumber.trimZeros(quotient, e, eDiff);
-    return BigNumber.doRound(res, precision, rounding);
+    return res.round(precision, rounding);
   }
 
   // todo: compare performance of sqrt with algorithm in as-big, which does not normalize number before iteration
-  public sqrt(precision: i32 = BigNumber.defaultPrecision, rounding: Rounding = BigNumber.defaultRounding): BigNumber {
+  sqrt(precision: i32 = BigNumber.defaultPrecision, rounding: Rounding = BigNumber.defaultRounding): BigNumber {
     if (this.isNegative) {
       throw new Error("Square root of negative BigNumbers is not supported");
     }
@@ -457,9 +457,9 @@ export class BigNumber {
     // round rescaled result
     let res: BigNumber;
     if (rounding == Rounding.NONE || precision == 0) {
-      res = BigNumber.doRound(scaledUnrounded, targetPrecision, rounding == Rounding.NONE ? Rounding.DOWN : rounding);
+      res = scaledUnrounded.round(targetPrecision, rounding == Rounding.NONE ? Rounding.DOWN : rounding);
     } else {
-      res = BigNumber.doRound(scaledUnrounded, precision, rounding);
+      res = scaledUnrounded.round(precision, rounding);
     }
 
     // ensure e is as expected
@@ -468,15 +468,59 @@ export class BigNumber {
       // add zero with preferred e and round to desired precision
       res = BigNumber.trimZeros(res.m, res.e, I32.MIN_VALUE);
       const zero: BigNumber = new BigNumber(BigInt.ZERO, preferredE, 0);
-      res = BigNumber.doRound(res.add(zero), precision, Rounding.NONE);
+      res = res.add(zero).round(precision, Rounding.NONE);
     }
 
     return res;
   }
 
-  private scaleByPowTen(k: i32): BigNumber {
-    const e: i32 = BigNumber.overflowGuard(<i64>this.e - k);
-    return new BigNumber(this.m, e, this._precision);
+  // follows ANSI standard X3.274-1996
+  pow(k: i32, precision: i32 = BigNumber.defaultPrecision, rounding: Rounding = BigNumber.defaultRounding): BigNumber {
+    if (precision <= 0) {
+      if (k < 0 || k > 999999999) {
+        throw new Error("Power argument out of range [0, 999999999] for exact precision: " + k.toString());
+      }
+      const newScale: i32 = BigNumber.overflowGuard(<i64>this.e * k);
+      return new BigNumber(this.m.pow(k), newScale, precision);
+    }
+    if (k < -999999999 || k > 999999999) {
+      throw new Error("Power argument out of range [-999999999, 999999999] for rounded precision: " + k.toString());
+    }
+    if (k == 0) {
+      return new BigNumber(BigInt.ONE, 0, 0);
+    }
+
+    let absPow: i32 = k > 0 ? k : -1 * k;
+    // X3.274 rule
+    const kLen: i32 = <i32>Math.floor(Math.log10(absPow) + 1) // length of n in digits
+    if (kLen > precision) {
+      throw new Error("Invalid operation");
+    }
+    const workingPrec: i32 = precision + kLen + 1;
+
+    // ready to carry out power calculation...
+    let accum: BigNumber = new BigNumber(BigInt.ONE, 0, 0);
+    let seenbit: boolean = false;        // set once we've seen a 1-bit
+    for (let i=1; ; i++) {            // for each bit [top bit ignored]
+      absPow += absPow;                 // shift left 1 bit
+      if (absPow < 0) {              // top bit is set
+        seenbit = true;         // OK, we're off
+        accum = accum.mul(this, workingPrec, rounding); // acc=acc*x
+      }
+      if (i == 31)
+        break;                  // that was the last bit
+      if (seenbit) {
+        accum = accum.mul(accum, workingPrec, rounding);   // acc=acc*acc [square]
+      }
+    }
+    // if negative n, calculate the reciprocal
+    if (k < 0) {
+      const one: BigNumber = new BigNumber(BigInt.ONE, 0, 0);
+      accum = one.div(accum, workingPrec, rounding);
+    }
+    // round to final precision and strip zeros
+    const rounded: BigNumber = accum.round(precision, rounding);
+    return BigNumber.trimZeros(rounded.m, rounded.e, I32.MIN_VALUE);
   }
 
   // UTILITIES /////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -494,13 +538,13 @@ export class BigNumber {
   floor(): BigNumber {
     const intLen: i64 = <i64>this.precision - this.e;
     const precision: i32 = BigNumber.overflowGuard(intLen > 0 ? intLen : 0);
-    return BigNumber.doRound(this, precision, Rounding.FLOOR);
+    return this.round(precision, Rounding.FLOOR);
   }
 
   ceil(): BigNumber {
     const intLen: i64 = <i64>this.precision - this.e;
     const precision: i32 = BigNumber.overflowGuard(intLen > 0 ? intLen : 0);
-    return BigNumber.doRound(this, precision, Rounding.CEIL);
+    return this.round(precision, Rounding.CEIL);
   }
 
   setScale(e: i32, rounding: Rounding): BigNumber {
@@ -521,6 +565,26 @@ export class BigNumber {
       const m: BigInt = BigNumber.divideAndRound(this.m, divisor, rounding);
       return new BigNumber(m, e, BigNumber.intLength(m));
     }
+  }
+
+  round(precision: i32 = BigNumber.defaultPrecision, rounding: Rounding = BigNumber.defaultRounding): BigNumber {
+    if (precision <= 0 || this.precision <= precision) {
+      return this;
+    }
+
+    let m: BigInt = this.m;
+    let e: i32 = this.e;
+    let prec: i32 = this.precision;
+
+    let pDiff: i32 = prec - precision;
+    while (pDiff > 0) {
+      e = BigNumber.overflowGuard(<i64>e - pDiff);
+      m = BigNumber.divideAndRoundByPowTen(m, pDiff, rounding);
+      prec = BigNumber.intLength(m);
+      pDiff = prec - precision;
+    }
+
+    return new BigNumber(m, e, prec);
   }
 
   // SYNTACTIC SUGAR ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -622,14 +686,6 @@ export class BigNumber {
 
   // SCALE SUPPORT /////////////////////////////////////////////////////////////
 
-  private static adjustScale(scale: i32, exp: i64): i32 {
-    const adjustedScale: i64 = <i64>scale - exp;
-    if (adjustedScale > I32.MAX_VALUE || adjustedScale < I32.MIN_VALUE) {
-      throw new Error("Scale out of range.");
-    }
-    return <i32>adjustedScale;
-  }
-
   private static overflowGuard(k: i64, isZero: boolean = false): i32 {
     let safeInt: i32 = <i32>k;
     if (<i64>safeInt != k) {
@@ -702,6 +758,11 @@ export class BigNumber {
     return BigNumber.BI_TEN_POWERS[n];
   }
 
+  private scaleByPowTen(k: i32): BigNumber {
+    const e: i32 = BigNumber.overflowGuard(<i64>this.e - k);
+    return new BigNumber(this.m, e, this._precision);
+  }
+
   // ARITHMETIC SUPPORT ////////////////////////////////////////////////////////
 
   // Compare Normalize dividend & divisor so that both fall into [0.1, 0.999...]
@@ -743,31 +804,6 @@ export class BigNumber {
       }
     }
     return quotient;
-  }
-
-  /**
-   * Returns a {@code BigDecimal} rounded according to the MathContext
-   * settings;
-   * If rounding is needed a new {@code BigDecimal} is created and returned.
-   */
-  private static doRound(val: BigNumber, precision: i32, rounding: Rounding): BigNumber {
-    if (precision <= 0 || val.precision <= precision) {
-      return val;
-    }
-
-    let m: BigInt = val.m;
-    let e: i32 = val.e;
-    let prec: i32 = val.precision;
-    
-    let pDiff: i32 = prec - precision;
-    while (pDiff > 0) {
-      e = BigNumber.overflowGuard(<i64>e - pDiff);
-      m = BigNumber.divideAndRoundByPowTen(m, pDiff, rounding);
-      prec = BigNumber.intLength(m);
-      pDiff = prec - precision;
-    }
-
-    return new BigNumber(m, e, prec);
   }
 
   private static roundToPlaces(val: BigNumber, digits: i32, rounding: Rounding): BigNumber {

@@ -72,4 +72,19 @@ describe("BigNumber simple arithmetic", () => {
     }
   });
 
+  it("pow", () => {
+    for (let i = 0; i < testCases.length; i++) {
+      const testCase: TestCase = testCases[i];
+      const x = BigNumber.fromString(testCase.x);
+      // square
+      const squared = x.pow(2).toFixed(30);
+      const expectedSquare = BigNumber.fromString(testCase.xSquare).toFixed(30);
+      expect(squared).toStrictEqual(expectedSquare);
+      // cube
+      const cubed = x.pow(3).toFixed(30);
+      const expectedCube = BigNumber.fromString(testCase.xCube).toFixed(30);
+      expect(cubed).toStrictEqual(expectedCube);
+    }
+  });
+
 });
