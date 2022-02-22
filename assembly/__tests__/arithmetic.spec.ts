@@ -54,4 +54,22 @@ describe("BigNumber simple arithmetic", () => {
     }
   });
 
+  it("square root", () => {
+    for (let i = 0; i < testCases.length; i++) {
+      const testCase: TestCase = testCases[i];
+      const x = BigNumber.fromString(testCase.x);
+      if (!x.isNegative) {
+        const result = x.sqrt().toFixed(30);
+        const expected = BigNumber.fromString(testCase.sqrtX).toFixed(30);
+        expect(result).toStrictEqual(expected);
+      }
+      const y = BigNumber.fromString(testCase.y);
+      if (!y.isNegative) {
+        const result = y.sqrt().toFixed(30);
+        const expected = BigNumber.fromString(testCase.sqrtY).toFixed(30);
+        expect(result).toStrictEqual(expected);
+      }
+    }
+  });
+
 });
