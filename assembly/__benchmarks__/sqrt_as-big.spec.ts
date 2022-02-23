@@ -17,10 +17,8 @@ describe("sqrt: as-big", () => {
   it("square root", () => {
     for (let i = 0; i < 100; i++) {
       const testCase: XY = testCases[i % testCases.length];
-      const x = testCase.x;
-      const y = testCase.y;
-      x.sqrt();
-      y.sqrt();
+      testCase.x.sqrt();
+      testCase.y.sqrt();
     }
   });
 

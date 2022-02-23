@@ -1,4 +1,5 @@
 import { BigInt } from "as-bigint";
+import { Big } from "as-big";
 
 export enum Rounding {
   UP, // Rounding mode to round away from zero.
@@ -37,8 +38,12 @@ export class BigNumber {
   }
 
   // 155, the number of digits in the maximum value of a 512 bit integer
-  public static defaultPrecision: i32 = 155;
-  public static defaultRounding: Rounding = Rounding.HALF_UP;
+  public static DEFAULT_PRECISION: i32 = 155;
+  public static DEFAULT_ROUNDING: Rounding = Rounding.HALF_UP;
+  public static readonly MAX_POWER: i32 = 999999999;
+
+  public static readonly ONE: BigNumber = new BigNumber(BigInt.ONE, 0, 0);
+  public static readonly HALF: BigNumber = new BigNumber(BigInt.fromUInt16(5), 1, 0);
 
   private static readonly TEN_POWERS: u32[] = [
     1,                     // 0 / 10^0
@@ -110,7 +115,7 @@ export class BigNumber {
   }
 
   // TODO: replace args with fraction class
-  static fromFraction(numerator: BigInt, denominator: BigInt, precision: i32 = BigNumber.defaultPrecision, rounding: Rounding = BigNumber.defaultRounding): BigNumber {
+  static fromFraction(numerator: BigInt, denominator: BigInt, precision: i32 = BigNumber.DEFAULT_PRECISION, rounding: Rounding = BigNumber.DEFAULT_ROUNDING): BigNumber {
     const floatNumerator = new BigNumber(numerator, 0, 0);
     const floatDenominator = new BigNumber(denominator, 0, 0);
     return floatNumerator.div(floatDenominator, precision, rounding);
@@ -123,7 +128,7 @@ export class BigNumber {
    * @param rounding
    */
   // todo: improve readability by skipping leading redundant leading zeros before main loop
-  static fromString(val: string, precision: i32 = BigNumber.defaultPrecision, rounding: Rounding = BigNumber.defaultRounding): BigNumber {
+  static fromString(val: string, precision: i32 = BigNumber.DEFAULT_PRECISION, rounding: Rounding = BigNumber.DEFAULT_ROUNDING): BigNumber {
     // big number values
     let mantissa: BigInt; // mantissa
     let exponent: i32 = 0; // exponent
@@ -226,7 +231,7 @@ export class BigNumber {
     return new BigNumber(val, 0, 0);
   }
 
-  static fromFloat64(val: f64, precision: i32 = BigNumber.defaultPrecision, rounding: Rounding = BigNumber.defaultRounding): BigNumber {
+  static fromFloat64(val: f64, precision: i32 = BigNumber.DEFAULT_PRECISION, rounding: Rounding = BigNumber.DEFAULT_ROUNDING): BigNumber {
     return BigNumber.fromString(val.toString(), precision, rounding);
   }
 
@@ -245,9 +250,8 @@ export class BigNumber {
     return new BigNumber(this.m.abs(), this.e, this._precision);
   }
 
-  reciprocal(precision: i32 = BigNumber.defaultPrecision, rounding: Rounding = BigNumber.defaultRounding): BigNumber {
-    const one: BigNumber = new BigNumber(BigInt.ONE, 0, 0);
-    return one.div(this, precision, rounding);
+  reciprocal(precision: i32 = BigNumber.DEFAULT_PRECISION, rounding: Rounding = BigNumber.DEFAULT_ROUNDING): BigNumber {
+    return BigNumber.ONE.div(this, precision, rounding);
   }
 
   // OUTPUT ////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -280,7 +284,7 @@ export class BigNumber {
     }
   }
 
-  toFixed(places: i32 = 18, rounding: Rounding = BigNumber.defaultRounding): string {
+  toFixed(places: i32 = 18, rounding: Rounding = BigNumber.DEFAULT_ROUNDING): string {
     // not rounding corresponds to rounding down in this case
     const round: Rounding = rounding == Rounding.NONE ? Rounding.DOWN : rounding;
 
@@ -314,7 +318,7 @@ export class BigNumber {
     }
   }
 
-  toSignificant(digits: i32 = 18, rounding: Rounding = BigNumber.defaultRounding): string {
+  toSignificant(digits: i32 = 18, rounding: Rounding = BigNumber.DEFAULT_ROUNDING): string {
     if (digits <= 0) {
       return "0";
     }
@@ -424,7 +428,7 @@ export class BigNumber {
     return this.add(BigNumber.from(other).opposite());
   }
 
-  mul<T>(other: T, precision: i32 = BigNumber.defaultPrecision, rounding: Rounding = BigNumber.defaultRounding): BigNumber {
+  mul<T>(other: T, precision: i32 = BigNumber.DEFAULT_PRECISION, rounding: Rounding = BigNumber.DEFAULT_ROUNDING): BigNumber {
     const multiplier: BigNumber = BigNumber.from(other);
     const left: BigInt = this.m;
     const right: BigInt = multiplier.m;
@@ -437,7 +441,7 @@ export class BigNumber {
   /**
    * Divides two BigNumbers and rounds result
    */
-  div<T>(other: T, precision: i32 = BigNumber.defaultPrecision, rounding: Rounding = BigNumber.defaultRounding): BigNumber {
+  div<T>(other: T, precision: i32 = BigNumber.DEFAULT_PRECISION, rounding: Rounding = BigNumber.DEFAULT_ROUNDING): BigNumber {
     const divisor: BigNumber = BigNumber.from(other);
     if (divisor.m.isZero()) {
       throw new Error("Divide by zero");
@@ -470,109 +474,48 @@ export class BigNumber {
     return res.round(precision, rounding);
   }
 
-  // todo: compare performance of sqrt with algorithm in as-big, which does not normalize number before iteration
-  sqrt(precision: i32 = BigNumber.defaultPrecision, rounding: Rounding = BigNumber.defaultRounding): BigNumber {
+  sqrt(precision: i32 = BigNumber.DEFAULT_PRECISION, rounding: Rounding = BigNumber.DEFAULT_ROUNDING): BigNumber {
+    if (this.isZero()) return this.copy();
     if (this.isNegative) {
-      throw new Error("Square root of negative BigNumbers is not supported");
-    }
-    if (this.isZero()) {
-      return new BigNumber(BigInt.ZERO, this.e / 2, 0);
+      throw new Error('No square root for negative numbers ' + this.toString());
     }
 
-    // trim BigNumber and adjust e to scale value between 0.1 < x < 10
-    const trimmed: BigNumber = BigNumber.trimZeros(this.m, this.e, I32.MIN_VALUE);
-    let e: i32 = trimmed.e - trimmed.precision + 1;
-    let eAdjust: i32 = e % 2 == 0 ? e : e - 1;
-    let normalized: BigNumber = trimmed.scaleByPowTen(eAdjust);
-    let normalizedPrec: i32 = normalized.precision;
-
-    // target precision is about 2N because sqrt(x^2N) = x^N
-    const targetPrecision: i32 = precision <= 0 ? trimmed.precision / 2 + 1 : precision;
-
-    // initial guess is an approximation found using Math.sqrt()
-    let approx: BigNumber = BigNumber.fromFloat64(Math.sqrt(normalized.toFloat64()));
-    let approxPrec: i32 = 15;
+    // initial estimate -> works for numbers up to 1024 digits
+    let res: BigNumber = BigNumber.fromFloat64(Math.sqrt(this.toFloat64()));
+    // stop condition
+    let rPrec: i32 = 15;
+    const targetPrec: i32 = (precision <= 0 ? this.precision / 2 + 1 : precision) + 2;
 
     // Newton-Raphson iteration
-    const half = new BigNumber(BigInt.fromUInt16(5), 1, 0);
-    const targetPrecPlusTwo: i32 = targetPrecision + 2;
     do {
-      // max of normalized precision, target precision, and approximation precision
-      let maxGuessTargetPrec: i32 = approxPrec > targetPrecPlusTwo ? approxPrec : targetPrecPlusTwo;
-      let tempPrec: i32 = maxGuessTargetPrec > normalizedPrec ? maxGuessTargetPrec : normalizedPrec;
       // approx = 0.5 * (approx + fraction / approx)
-      approx = half.mul(approx.add(normalized.div(approx, tempPrec, Rounding.HALF_EVEN)));
-      approxPrec *= 2;
-    } while (approxPrec < targetPrecPlusTwo);
+      res = res.add(this.div(res, targetPrec, Rounding.HALF_EVEN)).mul(BigNumber.HALF, targetPrec, Rounding.HALF_EVEN);
+      rPrec <<= 1;
+    } while (rPrec < targetPrec);
 
-    // rescale normalized estimate
-    const scaledUnrounded: BigNumber = approx.scaleByPowTen(-eAdjust / 2);
-
-    // round rescaled result
-    let res: BigNumber;
-    if (rounding == Rounding.NONE || precision == 0) {
-      res = scaledUnrounded.round(targetPrecision, rounding == Rounding.NONE ? Rounding.DOWN : rounding);
-    } else {
-      res = scaledUnrounded.round(precision, rounding);
-    }
-
-    // ensure e is as expected
-    const preferredE: i32 = this.e / 2;
-    if (res.e != preferredE) {
-      // add zero with preferred e and round to desired precision
-      res = BigNumber.trimZeros(res.m, res.e, I32.MIN_VALUE);
-      const zero: BigNumber = new BigNumber(BigInt.ZERO, preferredE, 0);
-      res = res.add(zero).round(precision, Rounding.NONE);
-    }
-
-    return res;
+    return res.round(precision, rounding);
   }
 
-  // follows ANSI standard X3.274-1996 algorithm
-  pow(k: i32, precision: i32 = BigNumber.defaultPrecision, rounding: Rounding = BigNumber.defaultRounding): BigNumber {
-    if (precision <= 0) {
-      if (k < 0 || k > 999999999) {
-        throw new Error("Power argument out of range [0, 999999999] for exact precision: " + k.toString());
-      }
-      const newScale: i32 = BigNumber.overflowGuard(<i64>this.e * k);
-      return new BigNumber(this.m.pow(k), newScale, precision);
-    }
-    if (k < -999999999 || k > 999999999) {
-      throw new Error("Power argument out of range [-999999999, 999999999] for rounded precision: " + k.toString());
-    }
-    if (k == 0) {
-      return new BigNumber(BigInt.ONE, 0, 0);
+  pow(k: i32, precision: i32 = BigNumber.DEFAULT_PRECISION, rounding: Rounding = BigNumber.DEFAULT_ROUNDING): BigNumber {
+    if (k < -BigNumber.MAX_POWER || k > BigNumber.MAX_POWER) {
+      throw new Error(`Power argument out of bounds [-${BigNumber.MAX_POWER}, ${BigNumber.MAX_POWER}]: ${k}`);
     }
 
-    let absPow: i32 = k > 0 ? k : -1 * k;
-    // X3.274 rule
-    const kLen: i32 = <i32>Math.floor(Math.log10(absPow) + 1) // length of n in digits
-    if (kLen > precision) {
-      throw new Error("Invalid operation");
-    }
-    const workingPrec: i32 = precision + kLen + 1;
+    let absK: i32 = k < 0 ? -k : k;
+    let x: BigNumber = this;
+    let y: BigNumber = BigNumber.ONE;
 
-    let accum: BigNumber = new BigNumber(BigInt.ONE, 0, 0);
-    let seenbit: boolean = false;        // set once we've seen a 1-bit
-    for (let i=1; ; i++) {            // for each bit [top bit ignored]
-      absPow += absPow;                 // shift left 1 bit
-      if (absPow < 0) {              // top bit is set
-        seenbit = true;         // OK, we're off
-        accum = accum.mul(this, workingPrec, rounding); // acc=acc*x
-      }
-      if (i == 31)
-        break;                  // that was the last bit
-      if (seenbit) {
-        accum = accum.mul(accum, workingPrec, rounding);   // acc=acc*acc [square]
-      }
+    for (;;) {
+      if (absK & 1) y = y.mul(x, 0, Rounding.NONE);
+      absK >>= 1;
+      if (!absK) break;
+      x = x.mul(x, 0, Rounding.NONE);
     }
-    // if negative n, calculate the reciprocal
+
     if (k < 0) {
-      accum = accum.reciprocal(workingPrec, rounding);
+      return y.reciprocal(precision, rounding);
     }
-    // round to final precision and strip zeros
-    const rounded: BigNumber = accum.round(precision, rounding);
-    return BigNumber.trimZeros(rounded.m, rounded.e, I32.MIN_VALUE);
+    return y.round(precision, rounding);
   }
 
   // UTILITIES /////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -621,7 +564,7 @@ export class BigNumber {
     return left.gte(right) ? left : right;
   }
 
-  setScale(e: i32, rounding: Rounding = BigNumber.defaultRounding): BigNumber {
+  setScale(e: i32, rounding: Rounding = BigNumber.DEFAULT_ROUNDING): BigNumber {
     if (e == this.e) {
       return this;
     }
@@ -642,7 +585,7 @@ export class BigNumber {
     }
   }
 
-  round(precision: i32 = BigNumber.defaultPrecision, rounding: Rounding = BigNumber.defaultRounding): BigNumber {
+  round(precision: i32 = BigNumber.DEFAULT_PRECISION, rounding: Rounding = BigNumber.DEFAULT_ROUNDING): BigNumber {
     if (precision <= 0 || this.precision <= precision) {
       return this;
     }
@@ -1047,7 +990,7 @@ export class BigNumber {
     return left.sub(right);
   }
 
-  static mul<T, U>(left: T, right: U, precision: i32 = BigNumber.defaultPrecision, rounding: Rounding = BigNumber.defaultRounding): BigNumber {
+  static mul<T, U>(left: T, right: U, precision: i32 = BigNumber.DEFAULT_PRECISION, rounding: Rounding = BigNumber.DEFAULT_ROUNDING): BigNumber {
     const a: BigNumber = BigNumber.from(left);
     const b: BigNumber = BigNumber.from(right);
     return a.mul(b, precision, rounding);
@@ -1055,10 +998,10 @@ export class BigNumber {
 
   @operator("*")
   private static mulOp(left: BigNumber, right: BigNumber): BigNumber {
-    return left.mul(right, BigNumber.defaultPrecision, BigNumber.defaultRounding);
+    return left.mul(right, BigNumber.DEFAULT_PRECISION, BigNumber.DEFAULT_ROUNDING);
   }
 
-  static div<T, U>(left: T, right: U, precision: i32 = BigNumber.defaultPrecision, rounding: Rounding = BigNumber.defaultRounding): BigNumber {
+  static div<T, U>(left: T, right: U, precision: i32 = BigNumber.DEFAULT_PRECISION, rounding: Rounding = BigNumber.DEFAULT_ROUNDING): BigNumber {
     const a: BigNumber = BigNumber.from(left);
     const b: BigNumber = BigNumber.from(right);
     return a.div(b, precision, rounding);
@@ -1066,7 +1009,7 @@ export class BigNumber {
 
   @operator("/")
   private static divOp(left: BigNumber, right: BigNumber): BigNumber {
-    return left.div(right, BigNumber.defaultPrecision, BigNumber.defaultRounding);
+    return left.div(right, BigNumber.DEFAULT_PRECISION, BigNumber.DEFAULT_ROUNDING);
   }
 
   static sqrt<T>(x: T): BigNumber {
@@ -1074,7 +1017,7 @@ export class BigNumber {
     return val.sqrt();
   }
 
-  static pow<T>(base: T, k: i32, precision: i32 = BigNumber.defaultPrecision, rounding: Rounding = BigNumber.defaultRounding): BigNumber {
+  static pow<T>(base: T, k: i32, precision: i32 = BigNumber.DEFAULT_PRECISION, rounding: Rounding = BigNumber.DEFAULT_ROUNDING): BigNumber {
     const val: BigNumber = BigNumber.from(base);
     return val.pow(k, precision, rounding);
   }

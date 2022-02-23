@@ -1,24 +1,24 @@
-import { BigNumber } from "../BigNumber";
+import { Big } from "as-big";
 import { BenchmarkCase } from "../__tests__/testUtils/TestCase";
 import { benchmarkCases } from "../__tests__/testUtils/benchmarkCases";
 
 class XY {
-  x: BigNumber;
-  y: BigNumber;
+  x: Big;
+  y: Big;
 }
 
 const testCases: XY[] = benchmarkCases.map<XY>((benchCase: BenchmarkCase) => ({
-  x: BigNumber.from(benchCase.x).abs(),
-  y: BigNumber.from(benchCase.y).abs(),
+  x: Big.of(benchCase.x),
+  y: Big.of(benchCase.y),
 }));
 
-describe("sqrt: as-bignumber", () => {
+describe("toString: as-big", () => {
 
-  it("square root", () => {
-    for (let i = 0; i < 100; i++) {
+  it("outputs to string", () => {
+    for (let i = 0; i < 10000; i++) {
       const testCase: XY = testCases[i % testCases.length];
-      testCase.x.sqrt();
-      testCase.y.sqrt();
+      testCase.x.toString();
+      testCase.y.toString();
     }
   });
 

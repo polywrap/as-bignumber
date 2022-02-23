@@ -8,17 +8,17 @@ class XY {
 }
 
 const testCases: XY[] = benchmarkCases.map<XY>((benchCase: BenchmarkCase) => ({
-  x: BigNumber.from(benchCase.x).abs(),
-  y: BigNumber.from(benchCase.y).abs(),
+  x: BigNumber.from(benchCase.x),
+  y: BigNumber.from(benchCase.y),
 }));
 
-describe("sqrt: as-bignumber", () => {
+describe("toString: as-bignumber", () => {
 
-  it("square root", () => {
-    for (let i = 0; i < 100; i++) {
+  it("outputs to string", () => {
+    for (let i = 0; i < 10000; i++) {
       const testCase: XY = testCases[i % testCases.length];
-      testCase.x.sqrt();
-      testCase.y.sqrt();
+      testCase.x.toString();
+      testCase.y.toString();
     }
   });
 
