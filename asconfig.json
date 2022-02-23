@@ -4,15 +4,11 @@
       "binaryFile": "build/untouched.wasm",
       "textFile": "build/untouched.wat",
       "sourceMap": true,
-      "debug": true,
-      "converge": false,
-      "noAssert": false
+      "debug": true
     },
     "release": {
       "binaryFile": "build/optimized.wasm",
       "optimize": true,
-      "optimizeLevel": 3,
-      "shrinkLevel": 2,
       "converge": true,
       "noAssert": true
     }

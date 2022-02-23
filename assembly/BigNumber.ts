@@ -590,6 +590,7 @@ export class BigNumber {
       return this;
     }
     const rounded: BigNumber = this.roundToPlaces(0, Rounding.FLOOR);
+    // this fixes a special case where rounding is not working as expected
     if (this.isNegative && this.lt(rounded)) {
       return rounded.sub(1);
     }
@@ -601,23 +602,12 @@ export class BigNumber {
       return this;
     }
     const rounded: BigNumber = this.roundToPlaces(0, Rounding.CEIL);
-    // rounding is not working as expected in this special case
+    // this fixes a special case where rounding is not working as expected
     if (this.isNegative && !rounded.isNegative && !rounded.isZero()) {
       return rounded.sub(1);
     }
     return rounded;
   }
-
-  // ceil(): BigNumber {
-  //   if (this.isInteger) {
-  //     return this;
-  //   }
-  //   const rounded: BigNumber = this.roundToPlaces(0, Rounding.FLOOR);
-  //   if (this.isNegative && this.lt(rounded)) {
-  //     return rounded;
-  //   }
-  //   return rounded.add(1);
-  // }
 
   static min<T, U>(x: T, y: U): BigNumber {
     const left: BigNumber = BigNumber.from(x);

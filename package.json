@@ -21,15 +21,17 @@
     "build": "yarn build:optimized",
     "build:untouched": "asc assembly/index.ts -o ./build/BigNumber.wasm -d ./build/BigNumber.d.ts --target debug",
     "build:optimized": "asc assembly/index.ts -o ./build/BigNumber.wasm -d ./build/BigNumber.d.ts --target release",
-    "test": "asp --verbose",
-    "test:ci": "asp --summary",
+    "test": "asp --verbose -c as-pect.config.js",
+    "test:ci": "asp --summary -c as-pect.config.js",
+    "benchmark": "asp --verbose -c benchmark.as-pect.config.js",
     "lint": "yarn eslint",
     "lint:fix": "yarn eslint --fix",
     "lint:ci": "yarn eslint",
-    "script:cases": "yarn script:calcPlannedCases && yarn script:genRandomCases && yarn script:calcRandomCases",
+    "script:testCases": "yarn script:calcPlannedCases && yarn script:genRandomCases && yarn script:calcRandomCases",
     "script:calcPlannedCases": "yarn node scripts/calcTestCases.js ./scripts/data/testCaseInputs.json ./scripts/data/testCases.json",
     "script:genRandomCases": "yarn node scripts/genRandomTestInputs.js ./scripts/data/randomTestCaseInputs.json 200",
-    "script:calcRandomCases": "yarn node scripts/calcTestCases.js ./scripts/data/randomTestCaseInputs.json ./scripts/data/randomTestCases.json"
+    "script:calcRandomCases": "yarn node scripts/calcTestCases.js ./scripts/data/randomTestCaseInputs.json ./scripts/data/randomTestCases.json",
+    "script:benchmarkCases": "yarn node scripts/genBenchmarkInputs.js ./scripts/data/benchmarkCases.json 100"
   },
   "dependencies": {
     "as-bigint": "^0.4.0"
@@ -45,6 +47,7 @@
     "eslint-plugin-prettier": "3.3.0",
     "prettier": "2.2.1",
     "rimraf": "3.0.2",
-    "bignumber.js": "^9.0.2"
+    "bignumber.js": "^9.0.2",
+    "as-big": "^0.1.5"
   }
 }
