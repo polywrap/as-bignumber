@@ -1,5 +1,4 @@
 import { BigInt } from "as-bigint";
-import { Big } from "as-big";
 
 export enum Rounding {
   UP, // Rounding mode to round away from zero.
@@ -428,14 +427,19 @@ export class BigNumber {
     return this.add(BigNumber.from(other).opposite());
   }
 
-  mul<T>(other: T, precision: i32 = BigNumber.DEFAULT_PRECISION, rounding: Rounding = BigNumber.DEFAULT_ROUNDING): BigNumber {
+  mul<T>(other: T, precision: i32 = 0, rounding: Rounding = BigNumber.DEFAULT_ROUNDING): BigNumber {
     const multiplier: BigNumber = BigNumber.from(other);
     const left: BigInt = this.m;
     const right: BigInt = multiplier.m;
     const m: BigInt = left.mul(right);
     const e: i32 = BigNumber.overflowGuard( <i64>this.e + multiplier.e, this.m.isZero());
-    const unrounded: BigNumber = new BigNumber(m, e, BigNumber.intLength(m));
-    return unrounded.round(precision, rounding);
+    return BigNumber.trimZeros(m, e, I32.MIN_VALUE).round(precision, rounding);
+  }
+
+  square(precision: i32 = 0, rounding: Rounding = BigNumber.DEFAULT_ROUNDING): BigNumber {
+    const m: BigInt = this.m.square();
+    const e: i32 = BigNumber.overflowGuard( <i64>this.e + this.e, this.m.isZero());
+    return BigNumber.trimZeros(m, e, I32.MIN_VALUE).round(precision, rounding);
   }
 
   /**
@@ -464,21 +468,18 @@ export class BigNumber {
       const rescale: i32 = BigNumber.overflowGuard(<i64>precision + rightP - leftP);
       left = BigNumber.mulPowTen(left, rescale);
     } else {
-      const newScale: i32 = BigNumber.overflowGuard(<i64>leftP - precision);
-      const rescale: i32 = BigNumber.overflowGuard(<i64>newScale - rightP);
+      const rescale: i32 = BigNumber.overflowGuard(<i64>leftP - precision - rightP);
       right = BigNumber.mulPowTen(right, rescale);
     }
     const quotient: BigInt = BigNumber.divideAndRound(left, right, rounding);
     // clean up and round
-    const res: BigNumber = BigNumber.trimZeros(quotient, e, eDiff);
-    return res.round(precision, rounding);
+    return BigNumber.trimZeros(quotient, e, eDiff).round(precision, rounding);
   }
 
   sqrt(precision: i32 = BigNumber.DEFAULT_PRECISION, rounding: Rounding = BigNumber.DEFAULT_ROUNDING): BigNumber {
+    if (this.isNegative)
+      throw new RangeError("Square root of negative numbers is not supported");
     if (this.isZero()) return this.copy();
-    if (this.isNegative) {
-      throw new Error('No square root for negative numbers ' + this.toString());
-    }
 
     // initial estimate -> works for numbers up to 1024 digits
     let res: BigNumber = BigNumber.fromFloat64(Math.sqrt(this.toFloat64()));
@@ -489,33 +490,41 @@ export class BigNumber {
     // Newton-Raphson iteration
     do {
       // approx = 0.5 * (approx + fraction / approx)
-      res = res.add(this.div(res, targetPrec, Rounding.HALF_EVEN)).mul(BigNumber.HALF, targetPrec, Rounding.HALF_EVEN);
+      res = this.div(res, targetPrec, Rounding.HALF_EVEN).add(res).mul(BigNumber.HALF);
       rPrec <<= 1;
     } while (rPrec < targetPrec);
 
     return res.round(precision, rounding);
   }
 
-  pow(k: i32, precision: i32 = BigNumber.DEFAULT_PRECISION, rounding: Rounding = BigNumber.DEFAULT_ROUNDING): BigNumber {
+  pow(k: i32, precision: i32 = 0, rounding: Rounding = BigNumber.DEFAULT_ROUNDING): BigNumber {
     if (k < -BigNumber.MAX_POWER || k > BigNumber.MAX_POWER) {
       throw new Error(`Power argument out of bounds [-${BigNumber.MAX_POWER}, ${BigNumber.MAX_POWER}]: ${k}`);
     }
+    const posK: boolean = k > 0;
 
-    let absK: i32 = k < 0 ? -k : k;
+    if (posK) {
+      const m: BigInt = this.m.pow(k);
+      const e: i32 = BigNumber.overflowGuard(<i64>this.e * k);
+      const res: BigNumber = BigNumber.trimZeros(m, e, I32.MIN_VALUE);
+      if (precision <= 0) {
+        return res;
+      }
+      return res.round(precision, rounding);
+    }
+
+    k = -k;
     let x: BigNumber = this;
-    let y: BigNumber = BigNumber.ONE;
-
-    for (;;) {
-      if (absK & 1) y = y.mul(x, 0, Rounding.NONE);
-      absK >>= 1;
-      if (!absK) break;
-      x = x.mul(x, 0, Rounding.NONE);
+    let res: BigNumber = BigNumber.ONE;
+    while (k > 0) {
+      /* if the bit is set multiply */
+      if ((k & 1) != 0) res = res.mul(x);
+      /* square */
+      if (k > 1) x = x.square();
+      /* shift to next bit */
+      k >>= 1;
     }
-
-    if (k < 0) {
-      return y.reciprocal(precision, rounding);
-    }
-    return y.round(precision, rounding);
+    return BigNumber.ONE.div(this, precision, rounding);
   }
 
   // UTILITIES /////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -534,7 +543,7 @@ export class BigNumber {
     }
     const rounded: BigNumber = this.roundToPlaces(0, Rounding.FLOOR);
     // this fixes a special case where rounding is not working as expected
-    if (this.isNegative && this.lt(rounded)) {
+    if (this.isNegative && this.compareTo(rounded) < 0) {
       return rounded.sub(1);
     }
     return rounded;
@@ -555,13 +564,13 @@ export class BigNumber {
   static min<T, U>(x: T, y: U): BigNumber {
     const left: BigNumber = BigNumber.from(x);
     const right: BigNumber = BigNumber.from(y);
-    return left.lte(right) ? left : right;
+    return left.compareTo(right) <= 0 ? left : right;
   }
 
   static max<T, U>(x: T, y: U): BigNumber {
     const left: BigNumber = BigNumber.from(x);
     const right: BigNumber = BigNumber.from(y);
-    return left.gte(right) ? left : right;
+    return left.compareTo(right) >= 0 ? left : right;
   }
 
   setScale(e: i32, rounding: Rounding = BigNumber.DEFAULT_ROUNDING): BigNumber {
@@ -710,7 +719,12 @@ export class BigNumber {
         return BigNumber.expandBigIntTenPowers(k);
       }
     }
-   return BigNumber.BI_TEN_POWERS[BigNumber.BI_TEN_POWERS_MAX - 1].mul(BigNumber.tenToThe(k - BigNumber.BI_TEN_POWERS_MAX + 1));
+    if (BigNumber.BI_TEN_POWERS.length < BigNumber.BI_TEN_POWERS_MAX) {
+      return BigNumber.expandBigIntTenPowers(BigNumber.BI_TEN_POWERS_MAX - 1)
+        .mul(BigNumber.tenToThe(k - BigNumber.BI_TEN_POWERS_MAX + 1));
+    }
+    return BigNumber.BI_TEN_POWERS[BigNumber.BI_TEN_POWERS.length - 1]
+      .mul(BigNumber.tenToThe(k - BigNumber.BI_TEN_POWERS.length + 1));
   }
 
   /**
@@ -732,11 +746,6 @@ export class BigNumber {
       BigNumber.BI_TEN_POWERS[i] = BigNumber.BI_TEN_POWERS[i - 1].mulInt(10);
     }
     return BigNumber.BI_TEN_POWERS[n];
-  }
-
-  private scaleByPowTen(k: i32): BigNumber {
-    const e: i32 = BigNumber.overflowGuard(<i64>this.e - k);
-    return new BigNumber(this.m, e, this._precision);
   }
 
   // ARITHMETIC SUPPORT ////////////////////////////////////////////////////////
@@ -762,8 +771,8 @@ export class BigNumber {
     const remainder: BigInt = intDiv[1];
 
     if (!remainder.isZero()) {
-      if (BigNumber.needIncrement(divisor.abs(), rounding, quotient.isNegative ? -1 : 1, quotient.abs(), remainder.abs())) {
-        return quotient.isNegative ? quotient.sub(BigInt.ONE) : quotient.add(BigInt.ONE);
+      if (BigNumber.needIncrement(divisor, rounding, quotient.isNegative ? -1 : 1, quotient, remainder)) {
+        return quotient.isNegative ? quotient.subInt(1) : quotient.addInt(1);
       }
     }
     return quotient;
@@ -775,11 +784,50 @@ export class BigNumber {
     const remainder: BigInt = intDiv[1];
 
     if (!remainder.isZero()) {
-      if (BigNumber.needIncrement(BigInt.fromUInt32(divisor), rounding, quotient.isNegative ? -1 : 1, quotient.abs(), remainder.abs())) {
-        return quotient.isNegative ? quotient.sub(BigInt.ONE) : quotient.add(BigInt.ONE);
+      if (BigNumber.needIncrement(BigInt.fromUInt32(divisor), rounding, quotient.isNegative ? -1 : 1, quotient, remainder)) {
+        return quotient.isNegative ? quotient.subInt(1) : quotient.addInt(1);
       }
     }
     return quotient;
+  }
+
+  /**
+   * Tests if quotient has to be incremented according the rounding
+   */
+  private static needIncrement(divisor: BigInt, rounding: Rounding, qsign: i32, quotient: BigInt, remainder: BigInt): boolean {
+    if (remainder.isZero()) {
+      return false;
+    }
+    switch(rounding) {
+      case Rounding.NONE:
+        throw new Error("Rounding necessary");
+      case Rounding.UP: // Away from zero
+        return true;
+      case Rounding.DOWN: // Towards zero
+        return false;
+      case Rounding.CEIL: // Towards +infinity
+        return qsign > 0;
+      case Rounding.FLOOR: // Towards -infinity
+        return qsign < 0;
+      default:
+        const cmpHalf: i32 = remainder.magCompareTo(divisor.div2());
+        if (cmpHalf < 0 ) { // We're closer to higher digit
+          return false;
+        } else if (cmpHalf > 0 ) { // We're closer to lower digit
+          return true;
+        } else { // half-way
+          switch(rounding) {
+            case Rounding.HALF_DOWN:
+              return false;
+            case Rounding.HALF_UP:
+              return true;
+            case Rounding.HALF_EVEN:
+              return quotient.isOdd();
+            default:
+              throw new Error("Unknown rounding type");
+          }
+        }
+    }
   }
 
   private roundToPlaces(places: i32, rounding: Rounding): BigNumber {
@@ -798,56 +846,6 @@ export class BigNumber {
     }
 
     return new BigNumber(m, e, -1);
-  }
-
-  /**
-   * Tests if quotient has to be incremented according the rounding
-   */
-  private static needIncrement(divisor: BigInt, rounding: Rounding, qsign: i32, quotient: BigInt, remainder: BigInt): boolean {
-    if (remainder.isZero()) {
-      throw new Error("Remainder is zero");
-      // return false;
-    }
-    // TODO: possible optimization here -> see java implementation;
-    // TODO: if i use magCompateTo here, then I don't think I need the abs values of args
-    const cmpHalf: i32 = remainder.compareTo(divisor.div2());
-    const isOdd: boolean = quotient.isOdd();
-    return BigNumber.commonNeedIncrement(rounding, qsign, cmpHalf, isOdd);
-  }
-
-  /**
-   * Shared logic of need increment computation.
-   */
-  private static commonNeedIncrement(rounding: Rounding, qsign: i32, cmpHalf: i32, isOdd: boolean): boolean {
-    switch(rounding) {
-      case Rounding.NONE:
-        throw new Error("Rounding necessary");
-      case Rounding.UP: // Away from zero
-        return true;
-      case Rounding.DOWN: // Towards zero
-        return false;
-      case Rounding.CEIL: // Towards +infinity
-        return qsign > 0;
-      case Rounding.FLOOR: // Towards -infinity
-        return qsign < 0;
-      default:
-        if (cmpHalf < 0 ) { // We're closer to higher digit
-          return false;
-        } else if (cmpHalf > 0 ) { // We're closer to lower digit
-          return true;
-        } else { // half-way
-          switch(rounding) {
-            case Rounding.HALF_DOWN:
-              return false;
-            case Rounding.HALF_UP:
-              return true;
-            case Rounding.HALF_EVEN:
-              return isOdd;
-            default:
-              throw new Error("Unknown rounding type");
-          }
-        }
-    }
   }
 
   // SUPPORT UTILS /////////////////////////////////////////////////////////////
@@ -953,7 +951,7 @@ export class BigNumber {
   }
 
   @operator(">")
-  static gtOp(left: BigNumber, right: BigNumber): boolean {
+  private static gtOp(left: BigNumber, right: BigNumber): boolean {
     return left.gt(right);
   }
 
@@ -964,7 +962,7 @@ export class BigNumber {
   }
 
   @operator(">=")
-  static gteOp(left: BigNumber, right: BigNumber): boolean {
+  private static gteOp(left: BigNumber, right: BigNumber): boolean {
     return left.gte(right);
   }
 

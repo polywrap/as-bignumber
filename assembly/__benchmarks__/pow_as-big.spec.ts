@@ -20,7 +20,7 @@ describe("pow: as-big", () => {
       const x = testCase.x;
       const y = testCase.y;
       x.pow(5);
-      y.pow(5);
+      y.pow(6);
     }
   });
 
