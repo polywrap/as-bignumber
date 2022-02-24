@@ -412,10 +412,10 @@ describe("toSignificant", () => {
     expect(bnNeg.toSignificant(4, Rounding.NONE)).toStrictEqual("-1234");
   });
 
-  it("Prints output with significant digits when rounding adds a zero", () => {
+  it("Prints output with significant digits when rounding would add a zero", () => {
     const str: string = "1234.01234567891";
     const bn: BigNumber = BigNumber.fromString(str);
-    expect(bn.toSignificant(14, Rounding.UP)).toStrictEqual("1234.0123456790");
+    expect(bn.toSignificant(14, Rounding.UP)).toStrictEqual("1234.012345679");
   });
 
   it("Prints output with significant digits when requested digits is zero or negative", () => {

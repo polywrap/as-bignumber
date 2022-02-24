@@ -127,6 +127,7 @@ export class BigNumber {
    * @param rounding
    */
   // todo: improve readability by skipping leading redundant leading zeros before main loop
+  // todo: optimize fromString
   static fromString(val: string, precision: i32 = BigNumber.DEFAULT_PRECISION, rounding: Rounding = BigNumber.DEFAULT_ROUNDING): BigNumber {
     // big number values
     let mantissa: BigInt; // mantissa
@@ -255,6 +256,7 @@ export class BigNumber {
 
   // OUTPUT ////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+  // todo: optimize toString
   toString(): string {
     const trimmed: BigNumber = BigNumber.trimZeros(this.m, this.e, I32.MIN_VALUE);
     if (trimmed.e == 0) {
@@ -284,11 +286,11 @@ export class BigNumber {
   }
 
   toFixed(places: i32 = 18, rounding: Rounding = BigNumber.DEFAULT_ROUNDING): string {
-    // not rounding corresponds to rounding down in this case
     const round: Rounding = rounding == Rounding.NONE ? Rounding.DOWN : rounding;
-
     const res: BigNumber = this.roundToPlaces(places, round);
     const resStr: string = res.toString();
+
+    // if integer, it's ready to go
     if (this.e > this.precision) {
       return resStr;
     }
@@ -321,11 +323,9 @@ export class BigNumber {
     if (digits <= 0) {
       return "0";
     }
-    const trimmed: BigNumber = BigNumber.trimZeros(this.m, this.e, I32.MIN_VALUE);
-    // not rounding corresponds to rounding down in this case
     const round: Rounding = rounding == Rounding.NONE ? Rounding.DOWN : rounding;
-    const res: BigNumber = trimmed.round(digits, round);
-    return res.toString(); // TODO: must add 0 if rounding adds a zero
+    const res: BigNumber = this.round(digits, round);
+    return res.toString();
   }
 
   toBigInt(): BigInt {
