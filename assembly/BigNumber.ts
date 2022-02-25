@@ -254,21 +254,22 @@ export class BigNumber {
   // OUTPUT ////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
   toString(): string {
-    if (this.e == 0) {
-      return this.m.toString();
+    const trimmed: BigNumber = BigNumber.trimZeros(this.m, this.e, I32.MIN_VALUE);
+    if (trimmed.e == 0) {
+      return trimmed.m.toString();
     }
     // integer number
-    if (this.e < 0) {
-      if (this.m.isZero()) {
+    if (trimmed.e < 0) {
+      if (trimmed.m.isZero()) {
         return "0";
       }
-      const mString: string = this.m.toString();
-      return mString.padEnd(mString.length - this.e, "0");
+      const mString: string = trimmed.m.toString();
+      return mString.padEnd(mString.length - trimmed.e, "0");
     }
     // decimal number
-    const neg: boolean = this.m.isNegative;
-    const mStr: string = (neg ? this.m.abs() : this.m).toString();
-    const i: i32 = mStr.length - this.e; // decimal point index related to mString
+    const neg: boolean = trimmed.m.isNegative;
+    const mStr: string = (neg ? trimmed.m.abs() : trimmed.m).toString();
+    const i: i32 = mStr.length - trimmed.e; // decimal point index related to mString
     if (i == 0) {
       return (neg ? "-0." : "0.") + mStr;
     } else if (i > 0) {
@@ -280,17 +281,17 @@ export class BigNumber {
   }
 
   toFixed(places: i32 = 18, rounding: Rounding = BigNumber.DEFAULT_ROUNDING): string {
-    const round: Rounding = rounding == Rounding.NONE ? Rounding.DOWN : rounding;
-    const res: BigNumber = this.roundToPlaces(places, round);
-    const resStr: string = res.toString();
-
-    // if integer, it's ready to go
     if (this.e > this.precision) {
-      return resStr;
+      const round: Rounding = rounding == Rounding.NONE ? Rounding.DOWN : rounding;
+      return this.roundToPlaces(places, round).toString();
     }
 
-    // calculate result length
+    const round: Rounding = rounding == Rounding.NONE ? Rounding.DOWN : rounding;
     const trimmed: BigNumber = BigNumber.trimZeros(this.m, this.e, I32.MIN_VALUE);
+    const res: BigNumber = trimmed.roundToPlaces(places, round);
+    const resStr: string = res.toString();
+
+    // calculate result length
     const intLength: i64 = <i64>trimmed.precision - trimmed.e;
     const precision: i32 = BigNumber.overflowGuard(intLength + places);
     // negative precision corresponds to empty string
@@ -318,8 +319,7 @@ export class BigNumber {
       return "0";
     }
     const round: Rounding = rounding == Rounding.NONE ? Rounding.DOWN : rounding;
-    const res: BigNumber = this.round(digits, round);
-    return BigNumber.trimZeros(res.m, res.e, I32.MIN_VALUE).toString();
+    return this.round(digits, round).toString();
   }
 
   toBigInt(): BigInt {
@@ -400,7 +400,7 @@ export class BigNumber {
 
   // ARITHMETIC ////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-  add<T>(other: T): BigNumber {
+  add<T>(other: T, precision: i32 = 0, rounding: Rounding = BigNumber.DEFAULT_ROUNDING): BigNumber {
     let addend = BigNumber.from(other);
     let left: BigInt = this.m;
     let right: BigInt = addend.m;
@@ -414,11 +414,11 @@ export class BigNumber {
       left = BigNumber.mulPowTen(left, rescale);
       exponent = addend.e;
     }
-    return BigNumber.trimZeros(left.add(right), exponent, I32.MIN_VALUE);
+    return new BigNumber(left.add(right), exponent, 0).round(precision, rounding);
   }
 
-  sub<T>(other: T): BigNumber {
-    return this.add(BigNumber.from(other).opposite());
+  sub<T>(other: T, precision: i32 = 0, rounding: Rounding = BigNumber.DEFAULT_ROUNDING): BigNumber {
+    return this.add(BigNumber.from(other).opposite(), precision, rounding);
   }
 
   mul<T>(other: T, precision: i32 = 0, rounding: Rounding = BigNumber.DEFAULT_ROUNDING): BigNumber {
@@ -427,13 +427,13 @@ export class BigNumber {
     const right: BigInt = multiplier.m;
     const m: BigInt = left.mul(right);
     const e: i32 = BigNumber.overflowGuard( <i64>this.e + multiplier.e, this.m.isZero());
-    return BigNumber.trimZeros(m, e, I32.MIN_VALUE).round(precision, rounding);
+    return new BigNumber(m, e, 0).round(precision, rounding);
   }
 
   square(precision: i32 = 0, rounding: Rounding = BigNumber.DEFAULT_ROUNDING): BigNumber {
     const m: BigInt = this.m.square();
     const e: i32 = BigNumber.overflowGuard( <i64>this.e + this.e, this.m.isZero());
-    return BigNumber.trimZeros(m, e, I32.MIN_VALUE).round(precision, rounding);
+    return new BigNumber(m, e, 0).round(precision, rounding);
   }
 
   /**
@@ -467,7 +467,7 @@ export class BigNumber {
     }
     const quotient: BigInt = BigNumber.divideAndRound(left, right, rounding);
     // clean up and round
-    return BigNumber.trimZeros(quotient, e, eDiff).round(precision, rounding);
+    return new BigNumber(quotient, e, 0).round(precision, rounding);
   }
 
   sqrt(precision: i32 = BigNumber.DEFAULT_PRECISION, rounding: Rounding = BigNumber.DEFAULT_ROUNDING): BigNumber {
@@ -500,11 +500,7 @@ export class BigNumber {
     if (posK) {
       const m: BigInt = this.m.pow(k);
       const e: i32 = BigNumber.overflowGuard(<i64>this.e * k);
-      const res: BigNumber = BigNumber.trimZeros(m, e, I32.MIN_VALUE);
-      if (precision <= 0) {
-        return res;
-      }
-      return res.round(precision, rounding);
+      return new BigNumber(m, e, 0).round(precision, rounding);
     }
 
     k = -k;
