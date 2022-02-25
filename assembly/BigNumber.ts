@@ -126,9 +126,7 @@ export class BigNumber {
    * @param precision
    * @param rounding
    */
-  // todo: improve readability by skipping leading redundant leading zeros before main loop
-  // todo: optimize fromString
-  static fromString(val: string, precision: i32 = BigNumber.DEFAULT_PRECISION, rounding: Rounding = BigNumber.DEFAULT_ROUNDING): BigNumber {
+  static fromString(val: string, precision: i32 = 0, rounding: Rounding = BigNumber.DEFAULT_ROUNDING): BigNumber {
     // big number values
     let mantissa: BigInt; // mantissa
     let exponent: i32 = 0; // exponent
@@ -150,7 +148,6 @@ export class BigNumber {
     }
 
     let dot: boolean = false; // decimal point
-    let eMark: i64 = 0; // exponential notation mark
     let idx: i32 = 0;
     let codes: i32[] = [];
     for (; len > 0; offset++, len--) {
@@ -169,7 +166,7 @@ export class BigNumber {
             codes[idx++] = char;
             ++p;
           }
-        // char is non-zero digit
+          // char is non-zero digit
         } else {
           // increment precision if char is not redundant leading zero
           if (p != 1 || idx != 0) {
@@ -196,7 +193,10 @@ export class BigNumber {
       if (char != 69 && char != 101) {
         throw new Error("Input string contains a character that is not a digit, decimal point, or \"e\" notation exponential mark.");
       }
-      eMark = BigNumber.parseExp(val, offset, len);
+      const eMark: i64 = BigNumber.parseExp(val, offset, len);
+      if (eMark != 0) {
+        exponent = BigNumber.overflowGuard(<i64>exponent - eMark);
+      }
       break;
     }
 
@@ -204,13 +204,13 @@ export class BigNumber {
     if (p == 0) {
       throw new Error("No digits found.");
     }
-    // Adjust scale if exp is not zero
-    if (eMark != 0) {
-      exponent = BigNumber.overflowGuard(<i64>exponent - eMark);
+
+    mantissa = BigInt.fromString((isNeg ? "-" : "") + String.fromCharCodes(codes));
+    if (mantissa.isZero()) {
+      return new BigNumber(mantissa, 0, 0);
     }
 
     // Remove leading zeros from precision (digits count)
-    mantissa = BigInt.fromString((isNeg ? "-" : "") + String.fromCharCodes(codes));
     if (precision > 0 && p > precision) {
       let precisionDiff: i32 = p - precision;
       while (precisionDiff > 0) {
@@ -221,9 +221,6 @@ export class BigNumber {
       }
     }
 
-    if (mantissa.isZero()) {
-      return new BigNumber(mantissa, 0, 0);
-    }
     return BigNumber.trimZeros(mantissa, exponent, I32.MIN_VALUE);
   }
 
@@ -256,25 +253,22 @@ export class BigNumber {
 
   // OUTPUT ////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-  // todo: optimize toString
   toString(): string {
-    const trimmed: BigNumber = BigNumber.trimZeros(this.m, this.e, I32.MIN_VALUE);
-    if (trimmed.e == 0) {
-      return trimmed.m.toString();
+    if (this.e == 0) {
+      return this.m.toString();
     }
     // integer number
-    if (trimmed.e < 0) {
-      if (trimmed.m.isZero()) {
+    if (this.e < 0) {
+      if (this.m.isZero()) {
         return "0";
       }
-      const trailingZeros: i32 = BigNumber.overflowGuard(<i64>-trimmed.e);
-      const mString: string = trimmed.m.toString();
-      return mString.padEnd(mString.length + trailingZeros, "0");
+      const mString: string = this.m.toString();
+      return mString.padEnd(mString.length - this.e, "0");
     }
     // decimal number
-    const neg: boolean = trimmed.m.isNegative;
-    const mStr: string = (neg ? trimmed.m.abs() : trimmed.m).toString();
-    const i: i32 = mStr.length - trimmed.e; // decimal point index related to mString
+    const neg: boolean = this.m.isNegative;
+    const mStr: string = (neg ? this.m.abs() : this.m).toString();
+    const i: i32 = mStr.length - this.e; // decimal point index related to mString
     if (i == 0) {
       return (neg ? "-0." : "0.") + mStr;
     } else if (i > 0) {
@@ -325,7 +319,7 @@ export class BigNumber {
     }
     const round: Rounding = rounding == Rounding.NONE ? Rounding.DOWN : rounding;
     const res: BigNumber = this.round(digits, round);
-    return res.toString();
+    return BigNumber.trimZeros(res.m, res.e, I32.MIN_VALUE).toString();
   }
 
   toBigInt(): BigInt {
@@ -420,7 +414,7 @@ export class BigNumber {
       left = BigNumber.mulPowTen(left, rescale);
       exponent = addend.e;
     }
-    return new BigNumber(left.add(right), exponent, 0);
+    return BigNumber.trimZeros(left.add(right), exponent, I32.MIN_VALUE);
   }
 
   sub<T>(other: T): BigNumber {
@@ -633,7 +627,7 @@ export class BigNumber {
     }
 
     if (len <= 0) {
-      throw new Error("No digits following exponential mark");
+      throw new Error("No digits following exponential mark.");
     }
     // skip leading zeros in the exponent
     while (len > 10 && char == '0') {
@@ -648,18 +642,14 @@ export class BigNumber {
     let exp: i64 = 0;
     for (;; len--) {
       const code = char.charCodeAt(0);
-      let v: i32;
-      if (code >= 48 && code <= 57) {
-        v = code - 48;
-      } else {
-        throw new Error("Not a digit");
+      if (code < 48 || code > 57) {
+        throw new Error("Encountered non-digit character following exponential mark.");
       }
-      exp = exp * 10 + v;
+      exp = exp * 10 + (code - 48);
       if (len == 1) {
         break; // that was final character
       }
-      offset++;
-      char = val.charAt(offset);
+      char = val.charAt(++offset);
     }
 
     // apply sign
