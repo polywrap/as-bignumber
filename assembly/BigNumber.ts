@@ -467,7 +467,7 @@ export class BigNumber {
     }
     const quotient: BigInt = BigNumber.divideAndRound(left, right, rounding);
     // clean up and round
-    return new BigNumber(quotient, e, 0).round(precision, rounding);
+    return BigNumber.trimZeros(quotient, e, eDiff).round(precision, rounding);
   }
 
   sqrt(precision: i32 = BigNumber.DEFAULT_PRECISION, rounding: Rounding = BigNumber.DEFAULT_ROUNDING): BigNumber {
