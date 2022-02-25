@@ -15,9 +15,9 @@ export enum Rounding {
 export class BigNumber {
 
   // Mantissa; A BigNumber takes the form m * 10^-e
-  readonly m: BigInt;
+  public readonly m: BigInt;
   // Scale; A BigNumber takes the form m * 10^-e
-  readonly e: i32;
+  public readonly e: i32;
   // Limits the length of the mantissa
   private _precision: i32;
   get precision(): i32 {
@@ -90,6 +90,8 @@ export class BigNumber {
     // @ts-ignore
     if (val instanceof string) return BigNumber.fromString(val);
     // @ts-ignore
+    if (val instanceof BigInt) return new BigNumber(val, 0, 0);
+    // @ts-ignore
     if (val instanceof f32) return BigNumber.fromFloat64(<f64>val);
     // @ts-ignore
     if (val instanceof f64) return BigNumber.fromFloat64(val);
@@ -113,7 +115,6 @@ export class BigNumber {
     throw new TypeError("Unsupported generic type " + nameof<T>(val));
   }
 
-  // TODO: replace args with fraction class
   static fromFraction(numerator: BigInt, denominator: BigInt, precision: i32 = BigNumber.DEFAULT_PRECISION, rounding: Rounding = BigNumber.DEFAULT_ROUNDING): BigNumber {
     const floatNumerator = new BigNumber(numerator, 0, 0);
     const floatDenominator = new BigNumber(denominator, 0, 0);
@@ -514,7 +515,7 @@ export class BigNumber {
       /* shift to next bit */
       k >>= 1;
     }
-    return BigNumber.ONE.div(this, precision, rounding);
+    return BigNumber.ONE.div(res, precision, rounding);
   }
 
   // UTILITIES /////////////////////////////////////////////////////////////////////////////////////////////////////////

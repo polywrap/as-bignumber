@@ -312,10 +312,10 @@ as-big@^0.1.5:
   resolved "https://registry.yarnpkg.com/as-big/-/as-big-0.1.5.tgz#9c4f08cf00be6c072536d4a9c3d47f1c38eb7e28"
   integrity sha512-58ZUBfOtJNgbUVYch9qghkWPdPlmMk3PvyDhyWVKwvao2BvD5uedjpC4V9kdPS74Jqh2f59kNAOJ7Bh+2pEpNQ==
 
-as-bigint@^0.4.0:
-  version "0.4.0"
-  resolved "https://registry.yarnpkg.com/as-bigint/-/as-bigint-0.4.0.tgz#96f0efd549c1031df010ebd787e05fbfe140ab11"
-  integrity sha512-oPJLz1EMeMHyFt+T9951i5PLHrekV9VsK05d26d2xO3h0NQbonBUveNwLj7IICa+3n0rvM/ZpWZ0k0LSJ7CMcw==
+as-bigint@^0.5.1:
+  version "0.5.1"
+  resolved "https://registry.yarnpkg.com/as-bigint/-/as-bigint-0.5.1.tgz#c14c381bf816798bbda35a8080a8085d036f72f1"
+  integrity sha512-1yFnss/Xz6ii69fK8uVWyZim/+ybgQWX98r8mqIfgs5MFEQaI+PkHtIDWZOwb8k0ASuZx0VQVvgnYtVo+/eMtg==
 
 assemblyscript@0.19.23:
   version "0.19.23"

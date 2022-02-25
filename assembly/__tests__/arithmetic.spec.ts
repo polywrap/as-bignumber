@@ -72,6 +72,17 @@ describe("Arithmetic operations", () => {
     }
   });
 
+  it("square", () => {
+    for (let i = 0; i < testCases.length; i++) {
+      const testCase: TestCase = testCases[i];
+      const x = BigNumber.fromString(testCase.x);
+      // square
+      const squared = x.square().toFixed(30);
+      const expectedSquare = BigNumber.fromString(testCase.xSquare).toFixed(30);
+      expect(squared).toStrictEqual(expectedSquare);
+    }
+  });
+
   it("pow", () => {
     for (let i = 0; i < testCases.length; i++) {
       const testCase: TestCase = testCases[i];

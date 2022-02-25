@@ -7,13 +7,15 @@
     "type": "git",
     "url": "https://github.com/polywrap/as-bignumber.git"
   },
-  "version": "0.0.1",
+  "version": "0.1.0",
   "types": "assembly/index.ts",
   "releaseFiles": [
+    "assembly/",
     "build/",
     "README.md",
     "LICENSE",
-    "package.json"
+    "package.json",
+    "yarn.lock"
   ],
   "scripts": {
     "reset": "yarn clean && yarn && yarn build",
@@ -34,7 +36,7 @@
     "script:benchmarkCases": "yarn node scripts/genBenchmarkInputs.js ./scripts/data/benchmarkCases.json 100"
   },
   "dependencies": {
-    "as-bigint": "^0.4.0"
+    "as-bigint": "^0.5.1"
   },
   "devDependencies": {
     "@as-pect/cli": "6.2.4",
