@@ -82,7 +82,7 @@ export class BigNumber {
   /**
    * Returns a new {BigNumber} instance from generic type {T}.
    *
-   * @param  val the number as {BigNumber}, {string}, or {number}
+   * @param  val the number as {BigNumber}, {BigInt}, {string}, or {number}
    * @return BigNumber the new {BigNumber} instance
    */
   static from<T>(val: T): BigNumber {
@@ -226,7 +226,7 @@ export class BigNumber {
   }
 
   static fromBigInt(val: BigInt): BigNumber {
-    return new BigNumber(val, 0, 0);
+    return new BigNumber(val.copy(), 0, 0);
   }
 
   static fromFloat64(val: f64, precision: i32 = BigNumber.DEFAULT_PRECISION, rounding: Rounding = BigNumber.DEFAULT_ROUNDING): BigNumber {
