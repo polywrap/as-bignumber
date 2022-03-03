@@ -226,7 +226,7 @@ export class BigNumber {
   }
 
   static fromBigInt(val: BigInt): BigNumber {
-    return new BigNumber(val, 0, 0);
+    return new BigNumber(val.copy(), 0, 0);
   }
 
   static fromFloat64(val: f64, precision: i32 = BigNumber.DEFAULT_PRECISION, rounding: Rounding = BigNumber.DEFAULT_ROUNDING): BigNumber {
