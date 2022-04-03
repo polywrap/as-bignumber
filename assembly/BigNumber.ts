@@ -122,7 +122,7 @@ export class BigNumber {
    * @param precision The target precision of the result (i.e. maximum number of digits in mantissa)
    * @param rounding The rounding method used, if necessary, to achieve the target precision
    */
-  static fromFraction<TInt, UInt>(numerator: TInt, denominator: UInt, precision: i32 = BigNumber.DEFAULT_PRECISION, rounding: Rounding = BigNumber.DEFAULT_ROUNDING): BigNumber {
+  static fromFraction<TInt, WInt>(numerator: TInt, denominator: WInt, precision: i32 = BigNumber.DEFAULT_PRECISION, rounding: Rounding = BigNumber.DEFAULT_ROUNDING): BigNumber {
     const floatNumerator = new BigNumber(BigInt.from(numerator), 0, 0);
     const floatDenominator = new BigNumber(BigInt.from(denominator), 0, 0);
     return floatNumerator.div(floatDenominator, precision, rounding);
