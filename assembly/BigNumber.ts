@@ -115,17 +115,24 @@ export class BigNumber {
     throw new TypeError("Unsupported generic type " + nameof<T>(val));
   }
 
-  static fromFraction(numerator: BigInt, denominator: BigInt, precision: i32 = BigNumber.DEFAULT_PRECISION, rounding: Rounding = BigNumber.DEFAULT_ROUNDING): BigNumber {
-    const floatNumerator = new BigNumber(numerator, 0, 0);
-    const floatDenominator = new BigNumber(denominator, 0, 0);
+  /**
+   * Constructs and returns BigNumber from two values of type BigInt, string, i64, u64, i32, u32, i16, u16, i8, or u8
+   * @param numerator The fraction numerator (dividend)
+   * @param denominator The fraction denominator (divisor)
+   * @param precision The target precision of the result (i.e. maximum number of digits in mantissa)
+   * @param rounding The rounding method used, if necessary, to achieve the target precision
+   */
+  static fromFraction<TInt, UInt>(numerator: TInt, denominator: UInt, precision: i32 = BigNumber.DEFAULT_PRECISION, rounding: Rounding = BigNumber.DEFAULT_ROUNDING): BigNumber {
+    const floatNumerator = new BigNumber(BigInt.from(numerator), 0, 0);
+    const floatDenominator = new BigNumber(BigInt.from(denominator), 0, 0);
     return floatNumerator.div(floatDenominator, precision, rounding);
   }
 
   /**
    * Constructs and returns BigNumber from decimal string
    * @param val A decimal string, e.g. "5.5", "5", "5E10"
-   * @param precision
-   * @param rounding
+   * @param precision The target precision of the result (i.e. maximum number of digits in mantissa)
+   * @param rounding The rounding method used, if necessary, to achieve the target precision
    */
   static fromString(val: string, precision: i32 = 0, rounding: Rounding = BigNumber.DEFAULT_ROUNDING): BigNumber {
     // big number values
