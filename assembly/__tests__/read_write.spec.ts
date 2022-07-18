@@ -181,6 +181,19 @@ describe("toFixed", () => {
     expect(bnHalf.toFixed(5, Rounding.HALF_UP)).toStrictEqual("1234.01235");
   });
 
+  it("Prints output with fixed precision Rounding.HALF_UP extra", () => {
+    let numerator: string = "6277101735386680763835789423207666416102355444464034512896";
+    let denominator: string = "1255420347077336152767157884631243763565102940515888205824";
+    let bn: BigNumber = BigNumber.from(numerator).div(BigNumber.from(denominator));
+    expect(bn.toFixed(4, Rounding.HALF_UP)).toStrictEqual("5.0000");
+
+    numerator = "39402006196394479212279040100143613805079739270465446667948293404245721771497210611414266254884915640806627990306816";
+    denominator = "3940200619639447921227904009917618810898447133059870911745099530599638745787684638426962086015715852749547551952896";
+    bn = BigNumber.from(numerator).div(BigNumber.from(denominator));
+    expect(bn.toFixed(4, Rounding.HALF_UP)).toStrictEqual("10.0000");
+
+  });
+
   it("Prints output with fixed precision Rounding.HALF_DOWN", () => {
     const str: string = "1234.0123456789";
     const bn: BigNumber = BigNumber.fromString(str);

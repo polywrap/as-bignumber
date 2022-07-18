@@ -309,7 +309,7 @@ export class BigNumber {
 
     // decimal number results may need padded zeros
     if (places > 0) {
-      if (trimmed.e <= 0) {
+      if (trimmed.e <= 0 || resStr.indexOf(".") < 0) {
         // integer number returned in decimal form
         return resStr + ".".padEnd(1 + places, "0");
       } else {
